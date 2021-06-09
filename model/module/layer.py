@@ -1,5 +1,7 @@
 import torch
+from model.module.wavelet_func import k1d_build
 from torch.nn import Parameter
+import torch.nn.functional as F
 
 
 class MultiDimWN(torch.nn.Module):
@@ -49,6 +51,115 @@ class MultiDimWN(torch.nn.Module):
         x = (self.bias + sum_hu + lin).squeeze(2)  # Now destroy HU dim
 
         return x
+
+
+def _param_init(out_ch: int, in_ch: int, l: int, scale, offset=0.5) -> torch.Tensor:
+    return (torch.rand(out_ch, in_ch, l) * scale) + torch.Tensor([offset])
+
+
+class FlexMultiDimWCN(torch.nn.Module):
+    """
+    aka Flexible Multiple Dimension Wavelet "Convolution" Network (FMDWCN)
+    For this layer, we do convolution operation instead of
+    """
+
+    def __init__(self, in_ch, out_ch, k_s, k_r, mother_wavelet, pd=None):
+        """
+
+        :param in_ch: Number of input channel
+        :param out_ch: Number of output channel
+        :param k_s: size of the kernel (Number of array)
+        :param k_r: range of the wavelet kernel
+        :param mother_wavelet: Mother wavelet function
+        :param pd: Padding size. Leave this as None to make a same len output
+        """
+        super(FlexMultiDimWCN, self).__init__()
+
+        self.pd = pd  # The calculation will do on forward method
+
+        assert k_s % 2 != 0, "Kernel size should be odd number"
+
+        self.k_s = k_s
+        self.k_r = k_r
+        self.in_ch = in_ch
+        self.out_ch = out_ch
+        self.mt_wvl = mother_wavelet
+
+        self.bias = Parameter(torch.Tensor([0]), requires_grad=True)
+        self.w_wvl = Parameter(_param_init(out_ch, in_ch, 1, 1.5), requires_grad=True)
+        self.w_lin = Parameter(_param_init(1, self.in_ch, 1, 0.5, 0.8), requires_grad=True)
+
+        self.w_trn = Parameter(_param_init(out_ch, in_ch, 1, scale=0, offset=0), requires_grad=True)
+        self.w_dil = Parameter(_param_init(out_ch, in_ch, 1, scale=0, offset=1), requires_grad=True)
+
+        self.k_linspace = k1d_build(self.k_s, self.k_r, self.in_ch, self.out_ch)
+        # Translation and dilation will be compute in forward method
+
+    def forward(self, x):
+        """
+        :param x: Expected shape [BS, CH, LEN]
+        :return:
+        """
+        k = self.mt_wvl(self.k_linspace)
+        k = (k - self.w_trn) / self.w_dil
+        k = k * self.w_wvl
+        if self.pd is None:
+            self.pd = int(self.k_s / 2)
+        wvl = F.conv1d(x, k, padding=self.pd)
+        lin = torch.sum(self.w_lin * x, dim=1, keepdim=True)
+        return self.bias + wvl + lin
+
+
+class FlexMultiDimDynamicWCN(torch.nn.Module):
+    """
+    aka Flexible Multiple Dimension Wavelet "Convolution" Network (FMDWCN)
+    For this layer, we do convolution operation instead of
+    """
+
+    def __init__(self, in_ch, out_ch, k_s, k_r, init_mtwvlt, pd=None):
+        """
+
+        :param in_ch: Number of input channel
+        :param out_ch: Number of output channel
+        :param k_s: size of the kernel (Number of array)
+        :param k_r: range of the wavelet kernel
+        :param init_mtwvlt: an initialize mother wavelet
+        :param pd: Padding size. Leave this as None to make a same len output
+        """
+        super(FlexMultiDimDynamicWCN, self).__init__()
+
+        self.pd = pd  # The calculation will do on forward method
+
+        assert k_s % 2 != 0, "Kernel size should be odd number"
+
+        self.k_s = k_s
+        self.k_r = k_r
+        self.in_ch = in_ch
+        self.out_ch = out_ch
+
+        self.bias = Parameter(torch.Tensor([0]), requires_grad=True)
+        self.w_wvl = Parameter(_param_init(out_ch, in_ch, 1, 1.5), requires_grad=True)
+        self.w_lin = Parameter(_param_init(1, self.in_ch, 1, 0.5, 0.8), requires_grad=True)
+
+        self.w_trn = Parameter(_param_init(out_ch, in_ch, 1, scale=0, offset=0), requires_grad=True)
+        self.w_dil = Parameter(_param_init(out_ch, in_ch, 1, scale=0, offset=1), requires_grad=True)
+
+        self.k = Parameter(
+            init_mtwvlt(k1d_build(self.k_s, self.k_r, self.in_ch, self.out_ch)), requires_grad=True)
+        # Translation and dilation will be compute in forward method
+
+    def forward(self, x):
+        """
+        :param x: Expected shape [BS, CH, LEN]
+        :return:
+        """
+        k = (self.k - self.w_trn) / self.w_dil
+        k = k * self.w_wvl
+        if self.pd is None:
+            self.pd = int(self.k_s / 2)
+        wvl = F.conv1d(x, k, padding=self.pd)
+        lin = torch.sum(self.w_lin * x, dim=1, keepdim=True)
+        return self.bias + wvl + lin
 
 
 class FlexMultiDimWN(torch.nn.Module):

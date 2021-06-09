@@ -15,6 +15,9 @@ class G_IMG(Module):
 
 
 class D_IMG(Module):
+    """
+    Discriminate the generated image and real image
+    """
     def __init__(self):
         super(D_IMG, self).__init__()
 
@@ -23,6 +26,9 @@ class D_IMG(Module):
 
 
 class G_EEG(Module):
+    """
+    Generate an EEG signal from image
+    """
     def __init__(self):
         super(G_EEG, self).__init__()
 
@@ -31,6 +37,9 @@ class G_EEG(Module):
 
 
 class D_EEG(Module):
+    """
+    Discriminate generated EEG signal and the real one
+    """
     def __init__(self):
         super(D_EEG, self).__init__()
 
