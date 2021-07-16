@@ -1,5 +1,5 @@
 from torch.nn import Module
-from model.module.layer import *
+from model.module.wnn_layer import *
 
 
 class G_IMG(Module):

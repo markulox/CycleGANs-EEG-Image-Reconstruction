@@ -1,0 +1,12 @@
+# Training epoch
+EPCH = 1000
+
+# Batch size
+BS = 8
+
+# Learning Rate
+LR_DEFAULT = 0.0001
+LR_D_EEG = LR_DEFAULT
+LR_G_EEG = LR_DEFAULT
+LR_D_IMG = LR_DEFAULT
+LR_G_IMG = LR_DEFAULT
