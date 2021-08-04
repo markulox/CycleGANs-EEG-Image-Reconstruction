@@ -8,3 +8,11 @@ citation/
 model/__pycache__/
 
 model/module/__pycache__/
+
+.vscode/
+
+__pycache__/
+
+training_code/saved_models/
+
+training_code/images/

@@ -23,7 +23,10 @@ def mexican_hat(z):  # Tested and yeah... I think its correct
     :param z: a linspace param
     :return:
     """
-    return (1 - torch.pow(z, 2)) * torch.exp(torch.Tensor([-0.5]) * torch.pow(z, 2))
+    if z.device.type == "cpu":
+        return (1 - torch.pow(z, 2)) * torch.exp(torch.Tensor([-0.5]) * torch.pow(z, 2))
+    elif "cuda" in z.device.type:
+        return (1 - torch.pow(z, 2)) * torch.exp(torch.cuda.FloatTensor([-0.5]) * torch.pow(z, 2))
 
 
 def partial_sine(z):

@@ -1,10 +1,52 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from typing import TypeVar, Union, Tuple
 
 T = TypeVar('T')
 _scalar_or_tuple_2_t = Union[T, Tuple[T, T]]
 _size_2_t = _scalar_or_tuple_2_t[int]
+
+
+class ResidualBlock(nn.Module):
+    """All credits to : trailingend
+    Link to his/her repository : https://github.com/trailingend"""
+
+    def __init__(self, channel_num):
+        super(ResidualBlock, self).__init__()
+
+        # TODO: 3x3 convolution -> relu
+        # the input and output channel number is channel_num
+        self.conv_block1 = nn.Sequential(
+            nn.Conv2d(in_channels=channel_num, out_channels=channel_num, kernel_size=3, stride=2),
+            nn.BatchNorm2d(channel_num),
+            nn.ReLU(),
+        )
+        self.conv_block2 = nn.Sequential(
+            nn.Conv2d(in_channels=channel_num, out_channels=channel_num, kernel_size=3, padding=1),
+            nn.BatchNorm2d(channel_num),
+        )
+        self.relu = nn.ReLU()
+
+        # self.test_conv = nn.Conv2d(in_channels=channel_num, out_channels=channel_num, kernel_size=3, stride=(2, 2))
+
+    def forward(self, x):
+        # TODO: forward
+        residual = self.conv_block1(x)
+        x = self.conv_block1(x)
+        x = self.conv_block2(x)
+        x = x + residual
+        out = self.relu(x)
+        # out = self.test_conv(out)
+        return out
+
+
+class Flatten(nn.Module):
+    def __init__(self):
+        super(Flatten, self).__init__()
+
+    def forward(self, x):
+        return x.reshape(x.shape[0], -1)
 
 
 class SeparableConv2d(torch.nn.Module):
