@@ -13,6 +13,8 @@ model/module/__pycache__/
 
 __pycache__/
 
-training_code/saved_models/
+train/cycle_gans/saved_models/
 
-training_code/images/
+train/cycle_gans/images/
+
+train/semi-supervise/saved_models/

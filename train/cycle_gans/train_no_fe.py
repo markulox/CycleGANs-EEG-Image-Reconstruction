@@ -3,17 +3,14 @@ import itertools
 import sys
 import time
 
-from torch import Tensor
-
-from param_config import *
+from train.cycle_gans.config.gans import *
 
 import torch
-from tqdm import tqdm
 
-from model.beau_inspired_model import D_EEG as D_EEG
-from model.beau_inspired_model import D_IMG as D_IMG
-from model.beau_inspired_model import IMG2EEG as G_EEG
-from model.beau_inspired_model import EEG2IMG as G_IMG
+from model.cycle_gans.beau_inspired_model import D_EEG as D_EEG
+from model.cycle_gans.beau_inspired_reduce import D_IMG as D_IMG
+from model.cycle_gans.beau_inspired_reduce import IMG2EEG as G_EEG
+from model.cycle_gans.beau_inspired_reduce import EEG2IMG as G_IMG
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid, save_image
 
@@ -79,17 +76,17 @@ def sample_images(epch):
     fake_stim = make_grid(fake_stim, nrow=5, normalize=True)
     # Arange images along y-axis
     image_grid = torch.cat((real_stim, fake_stim), 1)
-    save_image(image_grid, "images/%s/%s.png" % (dataset.get_name(), epch), normalize=False)
+    save_image(image_grid, "images/%s/%s_reduce.png" % (dataset.get_name(), epch), normalize=False)
 
 
 def load_model(start_epch):
     if start_epch != 0:
         # Load pretrained models
         print("<I> : Loading model at epoch check point = %d" % start_epch)
-        g_img.load_state_dict(torch.load("saved_models/%s/g_img_%d.pth" % (dataset.get_name(), start_epch)))
-        g_eeg.load_state_dict(torch.load("saved_models/%s/g_eeg_%d.pth" % (dataset.get_name(), start_epch)))
-        d_img.load_state_dict(torch.load("saved_models/%s/d_img_%d.pth" % (dataset.get_name(), start_epch)))
-        d_eeg.load_state_dict(torch.load("saved_models/%s/d_eeg_%d.pth" % (dataset.get_name(), start_epch)))
+        g_img.load_state_dict(torch.load("saved_models/%s/g_img_%d_reduce.pth" % (dataset.get_name(), start_epch)))
+        g_eeg.load_state_dict(torch.load("saved_models/%s/g_eeg_%d_reduce.pth" % (dataset.get_name(), start_epch)))
+        d_img.load_state_dict(torch.load("saved_models/%s/d_img_%d_reduce.pth" % (dataset.get_name(), start_epch)))
+        d_eeg.load_state_dict(torch.load("saved_models/%s/d_eeg_%d_reduce.pth" % (dataset.get_name(), start_epch)))
 
 
 ####################
