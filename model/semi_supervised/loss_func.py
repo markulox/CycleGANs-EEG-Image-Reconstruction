@@ -1,5 +1,7 @@
 from model.semi_supervised.model import *
 
+LOSS_MIN_CLAMP = 1e-38
+
 
 def __pairwise_matmul(x, y) -> torch.Tensor:
     """
@@ -33,7 +35,7 @@ def j1_loss(l, fx, fy) -> torch.Tensor:
     s_ij[s_ij > 0] = 1  # others will be 0
 
     lo_ij = __pairwise_matmul(fx, fy).clamp(max=88)
-    loss = (s_ij * lo_ij) - torch.log((1 + torch.exp(lo_ij)).clamp(min=1e-45))
+    loss = (s_ij * lo_ij) - torch.log((1 + torch.exp(lo_ij)).clamp(min=LOSS_MIN_CLAMP))
     loss = torch.sum(- loss)
     return loss
 
@@ -46,10 +48,8 @@ def j2_loss(l_real: torch.Tensor, lx: torch.Tensor) -> torch.Tensor:
               The range of value expect to be (0,1) in other words, cannot be 0 or 1
     :return: J2 loss value
     """
-    lx = lx.transpose(1, 2)
-    loss = torch.matmul(l_real, torch.log(lx.clamp(min=1e-45))) + torch.matmul((1 - l_real),
-                                                                               torch.log((1 - lx).clamp(min=1e-45)))
-
+    lx = lx.transpose(1, 2).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
+    loss = torch.matmul(l_real, torch.log(lx)) + torch.matmul((1 - l_real), torch.log((1 - lx)))
     loss = torch.sum(-loss)
     return loss
 
@@ -79,7 +79,7 @@ def j4_loss(fy_p, l_p, fx_u, l_u, ) -> torch.Tensor:
     s_ij_bar[s_ij_bar > 0] = 1  # other will be 0
 
     lo_ij_bar = __pairwise_matmul(fy_p, fx_u).clamp(max=88)
-    loss = (s_ij_bar * lo_ij_bar) - torch.log((1 + torch.exp(lo_ij_bar)).clamp(min=1e-45))
+    loss = (s_ij_bar * lo_ij_bar) - torch.log((1 + torch.exp(lo_ij_bar)).clamp(min=LOSS_MIN_CLAMP))
     loss = torch.sum(-loss)
     return loss
 
@@ -123,10 +123,10 @@ def l1_loss(d1: D1, x_p, x_p_gen: torch.Tensor, train_gen=False) -> torch.Tensor
     else:
         d1.train()
 
-    real_pair = d1.forward(x_p, x_p).clamp(min=1e-45)
-    fake_pair = (1 - d1.forward(x_p, x_p_gen)).clamp(min=1e-45)
+    real_pair = d1.forward(x_p, x_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
+    fake_pair = d1.forward(x_p, x_p_gen).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
 
-    loss = torch.log(real_pair) + torch.log(fake_pair)
+    loss = torch.log(real_pair) + torch.log(1 - fake_pair)
     loss = torch.sum(loss)
     return loss
 
@@ -159,9 +159,9 @@ def l2_loss(d2: D2, x_p, x_p_gen, train_gen=False) -> torch.Tensor:
         d2.eval()
     else:
         d2.train()
-    d2_x_p = d2.forward(x_p).clamp(min=1e-45)
-    d2_x_p_gen = (1 - d2.forward(x_p_gen)).clamp(min=1e-45)
-    loss = torch.log(d2_x_p) + torch.log(d2_x_p_gen)
+    d2_x_p = d2.forward(x_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
+    d2_x_p_gen = d2.forward(x_p_gen).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
+    loss = torch.log(d2_x_p) + torch.log(1 - d2_x_p_gen)
     loss = torch.sum(loss)
     return loss
 

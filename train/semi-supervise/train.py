@@ -1,16 +1,21 @@
 import torch
+import os
 import sys
 import time
 import datetime
 import math
 
 from dataset.mind_big_data import MindBigData
-from model.semi_supervised.loss_func import *
+from model.semi_supervised.loss_func import *  # The model already import in loss_func.py file
 from torch.utils.data import DataLoader
+from model.extras.EEGNet import EEGNet_Extractor
 
 from config import *
 
 from torchvision.utils import make_grid, save_image
+
+# Set anomaly detection while doing back-prop
+# torch.autograd.set_detect_anomaly(True)
 
 # Dataset initialization
 dataset = MindBigData(dev=DEV)
@@ -18,15 +23,26 @@ dat_loader = DataLoader(dataset=dataset, batch_size=BS, shuffle=True)
 
 # Model initialization
 input_sample = next(iter(dat_loader))[0]
+sample_len = input_sample.shape[2]
 
 NUM_LIM_CLASS = 40
+EXPORT_DISABLE = False
 
 sx = SemanticImageExtractor(output_class_num=NUM_LIM_CLASS,
                             feature_size=feature_size).to(DEV)
 # Argument expected_shape : send some sample data to let model determine its structure
-sy = SemanticEEGExtractor(expected_shape=input_sample,
-                          output_class_num=NUM_LIM_CLASS,
-                          feature_size=feature_size).to(DEV)
+# sy = SemanticEEGExtractor(expected_shape=input_sample,
+#                           output_class_num=NUM_LIM_CLASS,
+#                           feature_size=feature_size).to(DEV)
+sy = EEGNet_Extractor(in_channel=5,
+                      samples=sample_len,
+                      kern_len=sample_len // 2,
+                      F1=10,
+                      F2=10,
+                      D=2,
+                      nb_classes=NUM_LIM_CLASS,
+                      latent_size=feature_size).to(DEV)
+
 d1 = D1().to(DEV)
 d2 = D2().to(DEV)
 G = Generator().to(DEV)
@@ -39,22 +55,28 @@ d1_op = torch.optim.Adam(d1.parameters(), lr=mu2)
 d2_op = torch.optim.Adam(d2.parameters(), lr=mu2)
 G_op = torch.optim.Adam(G.parameters(), lr=mu2)
 
+# Set some path for export stuff
+__dirname__ = os.path.dirname(__file__)
+MODEL_PATH = os.path.join(__dirname__, "saved_models/%s/" % dataset.get_name())
+IMAGE_PATH = os.path.join(__dirname__, "images/%s/" % dataset.get_name())
+
 
 def load_model(start_epch):
     if start_epch != 0:
         # Load pretrained models
         print("<I> : Loading model at epoch check point = %d" % start_epch)
         if LOAD_FE:
-            sx.load_state_dict(torch.load("saved_models/%s/%d_sx.pth" % (dataset.get_name(), start_epch)))
-            sy.load_state_dict(torch.load("saved_models/%s/%d_sy.pth" % (dataset.get_name(), start_epch)))
+            sx.load_state_dict(torch.load(MODEL_PATH + "%d_sx.pth" % start_epch))
+            sy.load_state_dict(torch.load(MODEL_PATH + "%d_sy_EEGNet.pth" % start_epch))
         if LOAD_GEN:
-            G.load_state_dict(torch.load("saved_models/%s/%d_G.pth" % (dataset.get_name(), start_epch)))
+            G.load_state_dict(torch.load(MODEL_PATH + "%d_G.pth" % start_epch))
         if LOAD_DIS:
-            d1.load_state_dict(torch.load("saved_models/%s/%d_d1.pth" % (dataset.get_name(), start_epch)))
-            d2.load_state_dict(torch.load("saved_models/%s/%d_d2.pth" % (dataset.get_name(), start_epch)))
+            d1.load_state_dict(torch.load(MODEL_PATH + "%d_d1.pth" % start_epch))
+            d2.load_state_dict(torch.load(MODEL_PATH + "%d_d2.pth" % start_epch))
+
+        # Some visualization function
 
 
-# Some visualization function
 def sample_images(epch):
     """Saves a generated sample from the test set"""
     real_eeg, real_label, real_stim = next(iter(dat_loader))
@@ -70,15 +92,16 @@ def sample_images(epch):
     # Arange images along y-axis
     real_stim = make_grid(real_stim, nrow=5, normalize=True)
     image_grid = torch.cat((real_stim, fake_stim), 1)
-    save_image(image_grid, "images/%s/%s_reduce.png" % (dataset.get_name(), epch), normalize=False)
+    save_image(image_grid, IMAGE_PATH + "%s_reduce.png" % epch, normalize=False)
 
 
 def check_nan(chck, **log):
-    if math.isnan(chck):
-        print("<!> : NAN detected --------")
+    if math.isnan(chck) or math.isinf(chck):
+        print("<!> : NAN/INF detected --------")
         for each_elm in log:
             print(each_elm, log[each_elm], sep='=')
         print("---------------------------")
+        exit()
 
 
 # X stands for image
@@ -86,7 +109,7 @@ def check_nan(chck, **log):
 
 prev_time = time.time()
 load_model(EPCH_START)
-for epch in range(EPCH_START, EPCH_END+1):
+for epch in range(EPCH_START, EPCH_END + 1):
     for i, (y_p, l_real_p, x_p) in enumerate(dat_loader):
         # SEMANTIC NETWORK TRAINING SECTION
         # print("UPDATING SEMANTIC EXTRACTOR")
@@ -112,6 +135,8 @@ for epch in range(EPCH_START, EPCH_END+1):
         # j_loss = j1 + (alp1 * j2) + (alp2 * j3)
         # check_nan(j_loss.item(), j1=j1.item(), j2=j2.item(), j3=j3.item(), j4=j4.item(), j5=j5.item())
         j_loss.backward()
+        torch.nn.utils.clip_grad_norm_(sx.parameters(), MAX_GRAD_FLOAT32)
+        torch.nn.utils.clip_grad_norm_(sy.parameters(), MAX_GRAD_FLOAT32)
         sx_op.step()
         sy_op.step()
 
@@ -142,7 +167,8 @@ for epch in range(EPCH_START, EPCH_END+1):
         dl_loss = -((ld1 * l1) + l2 + (ld2 * l3) + l4)
         check_nan(dl_loss.item(), dl1=l1.item(), dl2=l2.item(), dl3=l3.item(), dl4=l4.item())
         dl_loss.backward()
-
+        torch.nn.utils.clip_grad_norm_(d1.parameters(), MAX_GRAD_FLOAT32)
+        torch.nn.utils.clip_grad_norm_(d2.parameters(), MAX_GRAD_FLOAT32)
         d1_op.step()
         d2_op.step()
 
@@ -158,7 +184,7 @@ for epch in range(EPCH_START, EPCH_END+1):
         gl_loss = -((ld1 * l1) + l2 + (ld2 * l3) + l4)
         check_nan(gl_loss.item(), gl1=l1.item(), gl2=l2.item(), gl3=l3.item(), gl4=l4.item())
         gl_loss.backward()
-
+        torch.nn.utils.clip_grad_norm_(G.parameters(), MAX_GRAD_FLOAT32)
         G_op.step()
 
         # Logging the progress
@@ -168,15 +194,15 @@ for epch in range(EPCH_START, EPCH_END+1):
         prev_time = time.time()
         # print(j_loss.item(), dl_loss.item())
 
-        if SAMPLE_INTERVAL != -1 and epch % SAMPLE_INTERVAL == 0 and i == 0:
+        if SAMPLE_INTERVAL != -1 and epch % SAMPLE_INTERVAL == 0 and i + 1 == len(dat_loader):
             sample_images(epch)
 
         sys.stdout.write(
-            "\r[Epoch %d/%d] [Batch %d/%d] [J loss: %f 1[%f] 2[%f] 3[%f] 4[%f] 5[%f]] [D loss: %s] [G loss: %s] ETA: %s"
+            "\r[Epoch %d/%d] [Batch %d/%d] [J loss: %f 1[%.4f] 2[%.4f] 3[%.2f] 4[%.2f] 5[%.2f]] [D loss: %.4f] [G loss: %.4f] ETA: %s"
             % (
                 epch,
                 EPCH_END,
-                i,
+                i + 1,
                 len(dat_loader),
                 j_loss.item(),
                 j1.item(),
@@ -191,10 +217,12 @@ for epch in range(EPCH_START, EPCH_END+1):
         )
         # print(j_loss.item(), dl_loss.item())
 
-        if CHCK_PNT_INTERVAL != -1 and epch % CHCK_PNT_INTERVAL == 0 and i == 0:
+        if CHCK_PNT_INTERVAL != -1 and epch % CHCK_PNT_INTERVAL == 0 and i + 1 == len(
+                dat_loader) and not EXPORT_DISABLE:
             # Save model checkpoints
-            torch.save(G.state_dict(), "saved_models/%s/%d_G.pth" % (dataset.get_name(), epch))
-            torch.save(d1.state_dict(), "saved_models/%s/%d_d1.pth" % (dataset.get_name(), epch))
-            torch.save(d2.state_dict(), "saved_models/%s/%d_d2.pth" % (dataset.get_name(), epch))
-            torch.save(sx.state_dict(), "saved_models/%s/%d_sx.pth" % (dataset.get_name(), epch))
-            torch.save(sy.state_dict(), "saved_models/%s/%d_sy.pth" % (dataset.get_name(), epch))
+            print("Exporting model...")
+            torch.save(G.state_dict(), MODEL_PATH + "%d_G.pth" % epch)
+            torch.save(d1.state_dict(), MODEL_PATH + "%d_d1.pth" % epch)
+            torch.save(d2.state_dict(), MODEL_PATH + "%d_d2.pth" % epch)
+            torch.save(sx.state_dict(), MODEL_PATH + "%d_sx.pth" % epch)
+            torch.save(sy.state_dict(), MODEL_PATH + "%d_sy_EEGNet.pth" % epch)

@@ -1,19 +1,22 @@
 import pickle
+import os
 
 from torch.utils.data import Dataset, DataLoader
 
-__PATH__DEFAULT__ = "/home/nopphon/Documents/AIT/Special " \
-                    "study/code/WCycleGANs_slim/code/dataset/content/mind_big_data/mind_big_data_64x64_label_40class.dat"
-
 
 class MindBigData(Dataset):
-    def __init__(self, dat_pth=__PATH__DEFAULT__, dev='cpu'):
+    __dirname__ = os.path.dirname(__file__)
+
+    __FILE_TRAIN_LOC__ = os.path.join(__dirname__, 'content/mind_big_data/mind_big_data_64x64_label_40class.dat')
+
+    def __init__(self, dat_pth=__FILE_TRAIN_LOC__, dev='cpu'):
         """
         :param dat_pth: Path of .dat file (Expected in format [(EEG_1,STIM_1),...,(EEG_N,STIM_N)])
         """
         super(MindBigData, self).__init__()
         self.dev = dev
         print("<I> : Loading dataset")
+        print(dat_pth)
         self.data_holder = pickle.load(open(dat_pth, "rb"))
 
     def __getitem__(self, idx):
@@ -32,7 +35,7 @@ class MindBigData(Dataset):
         return len(self.data_holder)
 
     def get_name(self):
-        return "MindBigData_128x128"
+        return "MindBigData_64x64_40_class"
 
 
 if __name__ == '__main__':

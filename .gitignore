@@ -18,3 +18,5 @@ train/cycle_gans/saved_models/
 train/cycle_gans/images/
 
 train/semi-supervise/saved_models/
+
+train/semi-supervise/images/

@@ -111,19 +111,19 @@ class Generator(nn.Module):  # <<- CGAN
     def __init__(self):
         super(Generator, self).__init__()
         self.deconv1 = nn.Sequential(
-            nn.ConvTranspose2d(1, 256, kernel_size=5, stride=1),
+            nn.ConvTranspose2d(1, 256, kernel_size=5, stride=1, bias=False),
             nn.ReLU()
         )
         self.deconv2 = nn.Sequential(
-            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=1),
+            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=1, bias=False),
             nn.ReLU()
         )
         self.deconv3 = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=1),
+            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=1, bias=False),
             nn.ReLU()
         )
         self.deconv4 = nn.Sequential(
-            nn.ConvTranspose2d(64, 3, kernel_size=5, stride=1),
+            nn.ConvTranspose2d(64, 3, kernel_size=5, stride=1, bias=False),
             nn.ReLU()
         )
         # self.deconv5 = nn.Sequential(

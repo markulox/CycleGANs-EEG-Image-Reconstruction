@@ -5,7 +5,9 @@ from typing import TypeVar, Union, Tuple
 
 T = TypeVar('T')
 _scalar_or_tuple_2_t = Union[T, Tuple[T, T]]
-_size_2_t = _scalar_or_tuple_2_t[int]
+
+
+# _size_2_t = _scalar_or_tuple_2_t[int]
 
 
 class ResidualBlock(nn.Module):
@@ -55,10 +57,10 @@ class SeparableConv2d(torch.nn.Module):
     def __init__(self,
                  in_channels,
                  out_channels,
-                 kernel_size: _size_2_t,
-                 stride: _size_2_t = 1,
-                 padding: Union[str, _size_2_t] = 0,
-                 dilation: _size_2_t = 1,
+                 kernel_size,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
                  bias=True,
                  padding_mode='zeros',
                  depth_multiplier=1,
@@ -96,22 +98,21 @@ class ConstraintConv2d(torch.nn.Conv2d):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,
-                 kernel_size: _size_2_t,
+                 kernel_size,
                  weight_max_lim: float = None,
                  weight_min_lim: float = None,
-                 stride: _size_2_t = 1,
-                 padding: Union[str, _size_2_t] = 0,
-                 dilation: _size_2_t = 1,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
                  groups: int = 1,
                  bias: bool = True,
-                 padding_mode: str = 'zeros',  # TODO: refine this type
-                 device=None,
-                 dtype=None):
+                 padding_mode: str = 'zeros'  # TODO: refine this type
+                 ):
         super(ConstraintConv2d, self).__init__(in_channels=in_channels, out_channels=out_channels,
                                                kernel_size=kernel_size,
                                                stride=stride, padding=padding, dilation=dilation, groups=groups,
                                                bias=bias,
-                                               padding_mode=padding_mode, device=device, dtype=dtype)
+                                               padding_mode=padding_mode)
         self.w_max = weight_max_lim
         self.w_min = weight_min_lim
 
@@ -122,9 +123,8 @@ class ConstraintConv2d(torch.nn.Conv2d):
 
 class ConstraintLinear(torch.nn.Linear):
     def __init__(self, in_features: int, out_features: int, weight_max_lim: float = None, weight_min_lim: float = None,
-                 bias: bool = True, device=None, dtype=None):
-        super(ConstraintLinear, self).__init__(in_features=in_features, out_features=out_features, bias=bias,
-                                               device=device, dtype=dtype)
+                 bias: bool = True):
+        super(ConstraintLinear, self).__init__(in_features=in_features, out_features=out_features, bias=bias)
         self.w_max = weight_max_lim
         self.w_min = weight_min_lim
 

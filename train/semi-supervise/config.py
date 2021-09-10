@@ -16,16 +16,21 @@ BS = 64
 feature_size = 200
 
 # Training epoch
-EPCH_START = 980
-EPCH_END = 2000
+EPCH_START = 2850
+EPCH_END = 6000
 
 # Device selection
-DEV = "cuda"
+DEV = "cuda:1"
 
-SAMPLE_INTERVAL = 10
 CHCK_PNT_INTERVAL = 50
+SAMPLE_INTERVAL = CHCK_PNT_INTERVAL
 
 # Which model want to load?
 LOAD_FE = True
 LOAD_DIS = True
 LOAD_GEN = True
+
+
+# Prevent gradient explode
+MAX_GRAD_FLOAT32 = 3e+38
+MIN_GRAD_FLOAT32 = -3e+38

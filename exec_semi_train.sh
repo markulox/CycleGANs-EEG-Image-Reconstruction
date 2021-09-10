@@ -1,0 +1,1 @@
+PYTHONPATH="/root/Thesis/Image_recon" python3 "/root/Thesis/Image_recon/train/semi-supervise/train.py"
