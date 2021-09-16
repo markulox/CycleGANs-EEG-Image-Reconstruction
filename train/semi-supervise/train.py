@@ -6,6 +6,8 @@ import datetime
 import math
 
 from dataset.mind_big_data import MindBigData
+from dataset.cylinder_rgb import Cylinder_RBG_Dataset
+from dataset.EEGImageNet_Spam_et_al import EEGImageNetDataset_Spam
 from model.semi_supervised.loss_func import *  # The model already import in loss_func.py file
 from torch.utils.data import DataLoader
 from model.extras.EEGNet import EEGNet_Extractor
@@ -18,14 +20,20 @@ from torchvision.utils import make_grid, save_image
 # torch.autograd.set_detect_anomaly(True)
 
 # Dataset initialization
+# dataset = MindBigData(dev=DEV)
 dataset = MindBigData(dev=DEV)
+dataset = EEGImageNetDataset_Spam(dev=DEV, sample_max_idx=380)
+val_dataset = MindBigData(dev=DEV)
+
 dat_loader = DataLoader(dataset=dataset, batch_size=BS, shuffle=True)
+val_loader = DataLoader(dataset=val_dataset, batch_size=BS, shuffle=True)
 
 # Model initialization
 input_sample = next(iter(dat_loader))[0]
 sample_len = input_sample.shape[2]
+channel_num = input_sample.shape[1]
 
-NUM_LIM_CLASS = 40
+NUM_LIM_CLASS = 3
 EXPORT_DISABLE = False
 
 sx = SemanticImageExtractor(output_class_num=NUM_LIM_CLASS,
@@ -34,7 +42,7 @@ sx = SemanticImageExtractor(output_class_num=NUM_LIM_CLASS,
 # sy = SemanticEEGExtractor(expected_shape=input_sample,
 #                           output_class_num=NUM_LIM_CLASS,
 #                           feature_size=feature_size).to(DEV)
-sy = EEGNet_Extractor(in_channel=5,
+sy = EEGNet_Extractor(in_channel=channel_num,
                       samples=sample_len,
                       kern_len=sample_len // 2,
                       F1=10,
@@ -220,7 +228,7 @@ for epch in range(EPCH_START, EPCH_END + 1):
         if CHCK_PNT_INTERVAL != -1 and epch % CHCK_PNT_INTERVAL == 0 and i + 1 == len(
                 dat_loader) and not EXPORT_DISABLE:
             # Save model checkpoints
-            print("Exporting model...")
+            sys.stdout.write("\033[K \rExporting model...")
             torch.save(G.state_dict(), MODEL_PATH + "%d_G.pth" % epch)
             torch.save(d1.state_dict(), MODEL_PATH + "%d_d1.pth" % epch)
             torch.save(d2.state_dict(), MODEL_PATH + "%d_d2.pth" % epch)

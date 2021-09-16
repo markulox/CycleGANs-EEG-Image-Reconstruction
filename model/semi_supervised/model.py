@@ -106,7 +106,8 @@ class SemanticEEGExtractor(nn.Module):
 
 class Generator(nn.Module):  # <<- CGAN
     # How can we input both label and features?
-    EXPECTED_NOISE = 2064
+    # EXPECTED_NOISE = 2064 << For EEGImageNet with 48x48
+    EXPECTED_NOISE = 2101  # Cylinder_RGB with 47x47
 
     def __init__(self):
         super(Generator, self).__init__()
@@ -137,7 +138,7 @@ class Generator(nn.Module):  # <<- CGAN
             raise RuntimeError("Incorrect shape of vector \'z\'")
         if eeg_semantic.shape[1] != 200:
             raise RuntimeError("Incorrect shape of vector \'eeg_semantic\'")
-        if eeg_label.shape[1] != 40:
+        if eeg_label.shape[1] != 3:
             raise RuntimeError("Incorrect shape of vector \'eeg_label\'")
 
     # -- Expected shape --

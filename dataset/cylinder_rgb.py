@@ -18,12 +18,14 @@ class Cylinder_RBG_Dataset(Dataset):
 
     __FILE_TRAIN_LOC_X__ = os.path.join(__dirname__, 'content/cylinder_rgb/data/1-par1_perception_0.0_128.0_X.npy')
     __FILE_TRAIN_LOC_Y__ = os.path.join(__dirname__, 'content/cylinder_rgb/data/1-par1_perception_0.0_128.0_y.npy')
-    __FILE_LOC_STIM__ = os.path.join(__dirname__, 'cylinder_rgb/stim/')
+    __FILE_LOC_STIM__ = os.path.join(__dirname__, 'content/cylinder_rgb/stim/')
 
-    __IMG_SIZE__ = 128
+    __IMG_SIZE__ = 64
 
     __img_name__ = ["r.png", "g.png", "b.png"]
     __stim__ = []
+
+    __NUM_CLASSES__ = 3
 
     def __init__(self, validation=False, dev="cpu"):
 
@@ -46,7 +48,7 @@ class Cylinder_RBG_Dataset(Dataset):
                                                transforms.ToTensor()])
 
         for each_stim in self.__img_name__:
-            stim: PIL.PngImagePlugin.PngImageFile = Image.open(self.__FILE_LOC_STIM__ + each_stim)
+            stim = Image.open(self.__FILE_LOC_STIM__ + each_stim)
             self.__stim__.append(self.transformer(stim.convert('RGB')))
 
     def __getitem__(self, idx):
@@ -56,9 +58,10 @@ class Cylinder_RBG_Dataset(Dataset):
         """
         label_idx = self.obj_label[idx].item()
         eeg = torch.Tensor(self.obj_data[idx, :, :]).float()
-        label = torch.Tensor([self.obj_label[idx]]).float()
+        label_tensor = torch.Tensor([self.obj_label[idx]]).long()
+        label_onehot = torch.nn.functional.one_hot(label_tensor, num_classes=self.__NUM_CLASSES__).float().squeeze(0)
         stim = torch.Tensor(self.__stim__[label_idx]).float()
-        return eeg.to(self.__DEV__), label.to(self.__DEV__), stim.to(self.__DEV__)
+        return eeg.to(self.__DEV__), label_onehot.to(self.__DEV__), stim.to(self.__DEV__)
 
     def __len__(self):
         return self.obj_data.shape[0]

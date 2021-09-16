@@ -52,7 +52,7 @@ class EEGNet_Extractor(nn.Module):
         )
 
         self.latent_fc = nn.Sequential(
-            nn.Linear(in_features=2090, out_features=latent_size),
+            nn.Linear(in_features=1140, out_features=latent_size),
             nn.LeakyReLU()
         )
 
@@ -68,7 +68,7 @@ class EEGNet_Extractor(nn.Module):
         x = self.dropout(x)
         x = self.block2(x)
         x = self.dropout(x)
-        x = x.reshape(x.shape[0], -1)
+        x = x.flatten(start_dim=1)
         latent = self.latent_fc(x).unsqueeze(1)
         label = self.final_fc(latent)
         return latent, label
