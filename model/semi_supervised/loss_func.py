@@ -31,12 +31,14 @@ def j1_loss(l, fx, fy) -> torch.Tensor:
     :return: The J1 loss value
     """
 
-    s_ij = __pairwise_matmul(l, l)  # Do matmul first then mask it
+    # s_ij = __pairwise_matmul(l, l)  # Do matmul first then mask it
+    s_ij = l @ l.T
     s_ij[s_ij > 0] = 1  # others will be 0
 
-    lo_ij = __pairwise_matmul(fx, fy).clamp(max=88)
+    # lo_ij = __pairwise_matmul(fx, fy).clamp(max=88)
+    lo_ij = (fx @ fy.T).clamp(max=88)
     loss = (s_ij * lo_ij) - torch.log((1 + torch.exp(lo_ij)).clamp(min=LOSS_MIN_CLAMP))
-    loss = torch.sum(- loss)
+    loss = -torch.sum(loss)
     return loss
 
 
@@ -48,9 +50,9 @@ def j2_loss(l_real: torch.Tensor, lx: torch.Tensor) -> torch.Tensor:
               The range of value expect to be (0,1) in other words, cannot be 0 or 1
     :return: J2 loss value
     """
-    lx = lx.transpose(1, 2).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
-    loss = torch.matmul(l_real, torch.log(lx)) + torch.matmul((1 - l_real), torch.log((1 - lx)))
-    loss = torch.sum(-loss)
+    lx = lx.clamp(min=LOSS_MIN_CLAMP, max=0.999999)
+    loss = (l_real * torch.log(lx)) + ((1 - l_real) * torch.log(1 - lx))
+    loss = -torch.sum(loss)
     return loss
 
 
@@ -66,7 +68,7 @@ def j3_loss(l_real: torch.Tensor, ly: torch.Tensor):
     return j2_loss(l_real, ly)
 
 
-def j4_loss(fy_p, l_p, fx_u, l_u, ) -> torch.Tensor:
+def j4_loss(fy_p, l_p, fx_u, l_u) -> torch.Tensor:
     """
     Calculate J4 loss
     :param l_p: paired label (might be a real label of fy_p)
@@ -75,12 +77,14 @@ def j4_loss(fy_p, l_p, fx_u, l_u, ) -> torch.Tensor:
     :param fy_p: Semantic features from EEG modality (expected to be paired data)
     :return: J4 loss value
     """
-    s_ij_bar = __pairwise_matmul(l_p, l_u)
+    # s_ij_bar = __pairwise_matmul(l_p, l_u)
+    s_ij_bar = l_p @ l_u.T  # [10,64]
     s_ij_bar[s_ij_bar > 0] = 1  # other will be 0
 
-    lo_ij_bar = __pairwise_matmul(fy_p, fx_u).clamp(max=88)
+    # lo_ij_bar = __pairwise_matmul(fy_p, fx_u).clamp(max=88)
+    lo_ij_bar = (fy_p @ fx_u.T).clamp(max=88)
     loss = (s_ij_bar * lo_ij_bar) - torch.log((1 + torch.exp(lo_ij_bar)).clamp(min=LOSS_MIN_CLAMP))
-    loss = torch.sum(-loss)
+    loss = -torch.sum(loss)
     return loss
 
 
@@ -144,7 +148,7 @@ def l3_loss(d1: D1, x_u, x_u_gen, train_gen=False) -> torch.Tensor:
     return l1_loss(d1, x_u, x_u_gen, train_gen)
 
 
-def l2_loss(d2: D2, x_p, x_p_gen, train_gen=False) -> torch.Tensor:
+def l2_loss(d2: D2, x_p, x_p_gen, fy_p, ly_p, train_gen=False) -> torch.Tensor:
     """
     This function calculate the l2 loss value
     :param d2: The discriminator (D2) model object
@@ -159,14 +163,14 @@ def l2_loss(d2: D2, x_p, x_p_gen, train_gen=False) -> torch.Tensor:
         d2.eval()
     else:
         d2.train()
-    d2_x_p = d2.forward(x_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
-    d2_x_p_gen = d2.forward(x_p_gen).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
+    d2_x_p = d2.forward(x_p, fy_p, ly_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
+    d2_x_p_gen = d2.forward(x_p_gen, fy_p, ly_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
     loss = torch.log(d2_x_p) + torch.log(1 - d2_x_p_gen)
     loss = torch.sum(loss)
     return loss
 
 
-def l4_loss(d2: D2, x_u, x_u_gen, train_gen=False) -> torch.Tensor:
+def l4_loss(d2: D2, x_u, x_u_gen, fx_u, lx_u, train_gen=False) -> torch.Tensor:
     """
     Calculate l4 loss
     :param d2: The discriminator (D2) model object
@@ -178,4 +182,4 @@ def l4_loss(d2: D2, x_u, x_u_gen, train_gen=False) -> torch.Tensor:
     :param train_gen: Set this to be True when you want to train the generator
     :return: l4 loss
     """
-    return l2_loss(d2, x_u, x_u_gen, train_gen)
+    return l2_loss(d2, x_u, x_u_gen, fx_u, lx_u, train_gen)

@@ -30,7 +30,6 @@ LOAD_FE = True
 LOAD_DIS = True
 LOAD_GEN = True
 
-
 # Prevent gradient explode
 MAX_GRAD_FLOAT32 = 3e+38
 MIN_GRAD_FLOAT32 = -3e+38

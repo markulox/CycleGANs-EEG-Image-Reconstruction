@@ -1,0 +1,13 @@
+DEV = "cuda:0"
+
+# Train config
+EPCH_START = 0
+EPCH_END = 12000
+BS = 64
+
+SAMPLE_INTERVAL = 100
+
+LR_D = 0.0001
+LR_G = 0.0001
+
+
