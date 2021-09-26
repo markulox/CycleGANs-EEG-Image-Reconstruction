@@ -310,8 +310,7 @@ class D2(nn.Module):
             nn.Linear(12750, 226),
             nn.LeakyReLU(),
             nn.Dropout(p=0.1),
-            nn.Linear(226, 1),
-            nn.Sigmoid()
+            nn.Linear(226, 1)
         )
 
         # self.final_fc_cylinder = nn.Sequential(

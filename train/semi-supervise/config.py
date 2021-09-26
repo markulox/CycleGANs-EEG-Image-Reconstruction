@@ -12,7 +12,7 @@ LAMBDA_GP = 10
 
 # LR params
 mu1 = 2e-4  # For J loss
-mu2 = 2e-4  # For L loss
+mu2 = 5e-5  # For L loss
 
 BS = 64
 feature_size = 200

@@ -80,10 +80,12 @@ weight_cliper = WeightClipper(min=WEIGHT_MIN, max=WEIGHT_MAX)
 sx_op = torch.optim.Adam(sx.parameters(), lr=mu1, betas=(0.5, 0.999))
 sy_op = torch.optim.Adam(sy.parameters(), lr=mu1, betas=(0.5, 0.999))
 
-d1_op = torch.optim.Adam(d1.parameters(), lr=mu2, betas=(0.5, 0.999))
+# d1_op = torch.optim.Adam(d1.parameters(), lr=mu2, betas=(0.5, 0.999))
 # d1_op = torch.optim.SGD(d1.parameters(), lr=mu2, momentum=0.5)
-d2_op = torch.optim.Adam(d2.parameters(), lr=mu2, betas=(0.5, 0.999))
+d1_op = torch.optim.RMSprop(d1.parameters(), lr=mu2)
+# d2_op = torch.optim.Adam(d2.parameters(), lr=mu2, betas=(0.5, 0.999))
 # d2_op = torch.optim.SGD(d2.parameters(), lr=mu2, momentum=0.5)
+d2_op = torch.optim.RMSprop(d2.parameters(), lr=mu2)
 G_op = torch.optim.Adam(G.parameters(), lr=mu2, betas=(0.5, 0.999))
 
 # Set some path for export stuff
