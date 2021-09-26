@@ -63,15 +63,19 @@ sy = EEGNet_Extractor(in_channel=channel_num,
 
 d1 = D1().to(DEV)
 d2 = D2().to(DEV)
-G = Generator(num_classes=NUM_LIM_CLASS).to(DEV)
+# G = Generator(num_classes=NUM_LIM_CLASS).to(DEV)
+input_size = NUM_LIM_CLASS + feature_size + ChakkyGenerator.EXPECTED_NOISE
+G = ChakkyGenerator(input_size=input_size).to(DEV)
 
 # Optimizer initialization
-sx_op = torch.optim.Adam(sx.parameters(), lr=mu1)
-sy_op = torch.optim.Adam(sy.parameters(), lr=mu1)
+sx_op = torch.optim.Adam(sx.parameters(), lr=mu1, betas=(0.5, 0.999))
+sy_op = torch.optim.Adam(sy.parameters(), lr=mu1, betas=(0.5, 0.999))
 
-d1_op = torch.optim.Adam(d1.parameters(), lr=mu2)
-d2_op = torch.optim.Adam(d2.parameters(), lr=mu2)
-G_op = torch.optim.Adam(G.parameters(), lr=mu2)
+d1_op = torch.optim.Adam(d1.parameters(), lr=mu2, betas=(0.5, 0.999))
+# d1_op = torch.optim.SGD(d1.parameters(), lr=mu2, momentum=0.5)
+d2_op = torch.optim.Adam(d2.parameters(), lr=mu2, betas=(0.5, 0.999))
+# d2_op = torch.optim.SGD(d2.parameters(), lr=mu2, momentum=0.5)
+G_op = torch.optim.Adam(G.parameters(), lr=mu2, betas=(0.5, 0.999))
 
 # Set some path for export stuff
 __dirname__ = os.path.dirname(__file__)
@@ -105,7 +109,7 @@ def sample_images(epch):
 
     eeg_features = eeg_features.squeeze(1).detach()
     p_label = p_label.squeeze(1).detach()
-    fake_stim = G(z=torch.rand(curr_BS, Generator.EXPECTED_NOISE).to(DEV), semantic=eeg_features, label=p_label)
+    fake_stim = G(z=torch.rand(curr_BS, G.EXPECTED_NOISE).to(DEV), semantic=eeg_features, label=p_label)
     fake_stim = make_grid(fake_stim, nrow=5, normalize=True)
     # Arange images along y-axis
     real_stim = make_grid(real_stim, nrow=5, normalize=True)
@@ -168,9 +172,9 @@ for epch in range(EPCH_START, EPCH_END + 1):
         # j_loss = (alp1 * j2) + (alp2 * j3) + (alp0 * j4) + (alp3 * j5)
         # j_loss = j1 + (alp1 * j2) + (alp2 * j3)
         # check_nan(j_loss.item(), j1=j1.item(), j2=j2.item(), j3=j3.item(), j4=j4.item(), j5=j5.item())
-        # j_loss.backward()
+        j_loss.backward()
         # j2.backward()
-        j3.backward()
+        # j3.backward()
 
         j2_acc = acc_calc(lx_p, l_real_p)
         j3_acc = acc_calc(ly_p, l_real_p)
@@ -192,9 +196,11 @@ for epch in range(EPCH_START, EPCH_END + 1):
         # Since some of batch might get reduce due to end of iteration
         curr_BS = y_p.shape[0]
 
-        x_p_gen = G.forward(z=torch.rand(curr_BS, Generator.EXPECTED_NOISE).to(DEV), semantic=fy_p, label=ly_p)
+        noise_1 = torch.normal(mean=1, std=1, size=(curr_BS, G.EXPECTED_NOISE)).to(DEV)
+        x_p_gen = G.forward(z=noise_1, semantic=fy_p, label=ly_p)
         x_p_gen_dtch = x_p_gen.detach()
-        x_u_gen = G.forward(z=torch.rand(curr_BS, Generator.EXPECTED_NOISE).to(DEV), semantic=fx_u, label=lx_u)
+        noise_2 = torch.normal(mean=1, std=1, size=(curr_BS, G.EXPECTED_NOISE)).to(DEV)
+        x_u_gen = G.forward(z=noise_2, semantic=fx_u, label=lx_u)
         x_u_gen_dtch = x_u_gen.detach()
 
         l1 = l1_loss(d1, x_p, x_p_gen_dtch)

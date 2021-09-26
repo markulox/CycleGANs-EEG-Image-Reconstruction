@@ -104,6 +104,49 @@ class SemanticEEGExtractor(nn.Module):
         return semantic_features, label
 
 
+# Generator Code
+
+# default ngf = 64
+class ChakkyGenerator(nn.Module):
+
+    EXPECTED_NOISE = 50
+
+    def __init__(self, input_size):
+        super(ChakkyGenerator, self).__init__()
+        nz = input_size
+        ngf = 64
+        nc = 3
+        self.main = nn.Sequential(
+            # input is Z, going into a convolution
+            #                   in_chan, out_chan, krn_size, stride, pad
+            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.LeakyReLU(),
+            # state size. (ngf*8) x 4 x 4
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.LeakyReLU(),
+            # state size. (ngf*4) x 8 x 8
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.LeakyReLU(),
+            # state size. (ngf*2) x 16 x 16
+            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.LeakyReLU(),
+            # state size. (ngf) x 32 x 32
+            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias=False),  # From 64 to 3
+            nn.Tanh()
+            # state size. (nc) x 64 x 64
+        )
+
+    def forward(self, z, semantic, label):
+        tnsr = torch.cat((z, semantic, label), 1)
+        new_shape = z.shape[1] + semantic.shape[1] + label.shape[1]
+        tnsr = tnsr.reshape(tnsr.shape[0], new_shape, 1, 1)
+        return self.main(tnsr)
+
+
 class Generator(nn.Module):  # <<- CGAN
     # How can we input both label and features?
     # EXPECTED_NOISE = 2064  # << For EEGImageNet with 48x48

@@ -20,6 +20,8 @@ class VeryNiceDataset(Dataset):
         eeg = curr_entry[0].to(self.dev)
         label = curr_entry[1].to(self.dev)
         stim = curr_entry[2].to(self.dev)
+        # Normalize stim
+        stim = (stim - 127.5) / 127.5
         return eeg, label, stim
 
     def __len__(self):
