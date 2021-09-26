@@ -108,7 +108,6 @@ class SemanticEEGExtractor(nn.Module):
 
 # default ngf = 64
 class ChakkyGenerator(nn.Module):
-
     EXPECTED_NOISE = 50
 
     def __init__(self, input_size):

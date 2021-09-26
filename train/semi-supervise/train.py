@@ -19,6 +19,7 @@ from torchvision.utils import make_grid, save_image
 
 import matplotlib.pyplot as plt
 import numpy as np
+from utils import WeightClipper, weights_init
 
 # Set anomaly detection while doing back-prop
 # torch.autograd.set_detect_anomaly(True)
@@ -66,6 +67,14 @@ d2 = D2().to(DEV)
 # G = Generator(num_classes=NUM_LIM_CLASS).to(DEV)
 input_size = NUM_LIM_CLASS + feature_size + ChakkyGenerator.EXPECTED_NOISE
 G = ChakkyGenerator(input_size=input_size).to(DEV)
+
+# Init model weight
+G.apply(weights_init)
+d1.apply(weights_init)
+d2.apply(weights_init)
+
+# Model util
+weight_cliper = WeightClipper(min=WEIGHT_MIN, max=WEIGHT_MAX)
 
 # Optimizer initialization
 sx_op = torch.optim.Adam(sx.parameters(), lr=mu1, betas=(0.5, 0.999))
@@ -179,10 +188,10 @@ for epch in range(EPCH_START, EPCH_END + 1):
         j2_acc = acc_calc(lx_p, l_real_p)
         j3_acc = acc_calc(ly_p, l_real_p)
 
-        torch.nn.utils.clip_grad_norm_(sx.parameters(), MAX_GRAD_FLOAT32)
-        torch.nn.utils.clip_grad_norm_(sy.parameters(), MAX_GRAD_FLOAT32)
+        # torch.nn.utils.clip_grad_norm_(sx.parameters(), MAX_GRAD_FLOAT32)
+        # torch.nn.utils.clip_grad_norm_(sy.parameters(), MAX_GRAD_FLOAT32)
 
-        # DISCRIMINATOR TRAINING SECTION
+        # DISCRIMINATOR TRAINING SECTION #########################################
         # print("UPDATING DISCRIM")
         d1_op.zero_grad()
         d2_op.zero_grad()
@@ -203,10 +212,10 @@ for epch in range(EPCH_START, EPCH_END + 1):
         x_u_gen = G.forward(z=noise_2, semantic=fx_u, label=lx_u)
         x_u_gen_dtch = x_u_gen.detach()
 
-        l1 = l1_loss(d1, x_p, x_p_gen_dtch)
-        l2 = l2_loss(d2, x_p, x_p_gen_dtch, fy_p, ly_p)
-        l3 = l3_loss(d1, x_u, x_u_gen_dtch)
-        l4 = l4_loss(d2, x_u, x_u_gen_dtch, fx_u, lx_u)
+        l1 = l1_loss_v2(d1, x_p, x_p_gen_dtch, LAMBDA_GP)
+        l2 = l2_loss_v2(d2, x_p, x_p_gen_dtch, fy_p, ly_p, LAMBDA_GP)
+        l3 = l3_loss_v2(d1, x_u, x_u_gen_dtch, LAMBDA_GP)
+        l4 = l4_loss_v2(d2, x_u, x_u_gen_dtch, fx_u, lx_u, LAMBDA_GP)
 
         dl_loss = -((ld1 * l1) + l2 + (ld2 * l3) + l4)
         check_nan(dl_loss.item(), dl1=l1.item(), dl2=l2.item(), dl3=l3.item(), dl4=l4.item())
@@ -216,14 +225,18 @@ for epch in range(EPCH_START, EPCH_END + 1):
         d1_op.step()
         d2_op.step()
 
-        # GENERATOR TRAINING SECTION
+        # Apply weight clipper
+        d1.apply(weight_cliper)
+        d2.apply(weight_cliper)
+
+        # GENERATOR TRAINING SECTION #########################################
         # print("UPDATING GENERATOR")
         G_op.zero_grad()
 
-        l1 = l1_loss(d1, x_p, x_p_gen, train_gen=True)
-        l2 = l2_loss(d2, x_p, x_p_gen, fy_p, ly_p, train_gen=True)
-        l3 = l3_loss(d1, x_u, x_u_gen, train_gen=True)
-        l4 = l4_loss(d2, x_u, x_u_gen, fx_u, lx_u, train_gen=True)
+        l1 = l1_loss_v2(d1, x_p, x_p_gen, LAMBDA_GP, train_gen=True)
+        l2 = l2_loss_v2(d2, x_p, x_p_gen, fy_p, ly_p, LAMBDA_GP, train_gen=True)
+        l3 = l3_loss_v2(d1, x_u, x_u_gen, LAMBDA_GP, train_gen=True)
+        l4 = l4_loss_v2(d2, x_u, x_u_gen, fx_u, lx_u, LAMBDA_GP, train_gen=True)
 
         gl_loss = -((ld1 * l1) + l2 + (ld2 * l3) + l4)
         check_nan(gl_loss.item(), gl1=l1.item(), gl2=l2.item(), gl3=l3.item(), gl4=l4.item())

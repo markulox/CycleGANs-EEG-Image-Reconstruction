@@ -5,9 +5,30 @@ import sys
 
 from torch.autograd import Variable
 import torch
+from torch import nn as nn
 import numpy as np
 
 from torchvision.utils import save_image
+
+
+# custom weights initialization called on netG and netD
+def weights_init(model):
+    for m in model.modules():  # loop all layers in that model
+        if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.BatchNorm2d)):
+            nn.init.normal_(m.weight.data, 0.0, 0.02)
+
+
+class WeightClipper(object):
+
+    def __init__(self, min, max):
+        self.min = min
+        self.max = max
+
+    def __call__(self, module):
+        # filter the variables to get the ones you want
+        if hasattr(module, 'weight'):
+            w = module.weight.data
+            w = w.clamp(self.min, self.max)
 
 
 class ReplayBuffer:
@@ -47,7 +68,6 @@ class LambdaLR:
 def check_inf_nan_tensor(tensor):
     print("nan : {}".format(torch.sum(torch.isnan(tensor)).item()))
     print("inf : {}".format(torch.sum(torch.isinf(tensor)).item()))
-
 
 # # Check the split dataset
 # def check_split(X1, X2, y1, y2, name1, name2):

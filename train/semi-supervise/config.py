@@ -8,6 +8,8 @@ alp3 = 1
 ld1 = 1
 ld2 = 1
 
+LAMBDA_GP = 10
+
 # LR params
 mu1 = 2e-4  # For J loss
 mu2 = 2e-4  # For L loss
@@ -33,3 +35,7 @@ LOAD_GEN = True
 # Prevent gradient explode
 MAX_GRAD_FLOAT32 = 3e+38
 MIN_GRAD_FLOAT32 = -3e+38
+
+# Model
+WEIGHT_MIN = -0.01
+WEIGHT_MAX = -WEIGHT_MIN
