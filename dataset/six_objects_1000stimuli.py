@@ -1,16 +1,19 @@
 import os
+
+import torch
 from torch.utils.data import Dataset
 import pickle
 
 
 class SixObject1KStimuli(Dataset):
     __dirname__ = os.path.dirname(__file__)
-    __FILE_TRAIN_LOC__ = os.path.join(__dirname__, 'content/six_objects_1000stimuli/6class_1k_img_each.dat')
+    __FILE_TRAIN_LOC__ = os.path.join(__dirname__, 'content/six_objects_1000stimuli/6class_1k_img_each_no_idle.dat')
 
     # __FILE_VAL_LOC__ = os.path.join(__dirname__, 'content/very_nice_dataset/')
 
-    def __init__(self, dev):
+    def __init__(self, dev, exclude_class: list = None):
         super(SixObject1KStimuli, self).__init__()
+        self.exclude_class = exclude_class
         self.whole_data = pickle.load(open(self.__FILE_TRAIN_LOC__, "rb"))
         self.dev = dev
 
@@ -19,7 +22,7 @@ class SixObject1KStimuli(Dataset):
         stim = curr_item[0].to(self.dev)
         label = curr_item[1].to(self.dev)
         # Normalize stim
-        stim = (stim - 127.5) / 127.5
+        stim = (stim - 0.5) / 0.5
         return stim, label
 
     def __len__(self):

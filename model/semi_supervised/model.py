@@ -1,4 +1,5 @@
 import torch
+import torchvision
 from torch import nn
 
 
@@ -57,6 +58,79 @@ class SemanticImageExtractor(nn.Module):
         x = self.alx_layer3(x)
         x = self.alx_layer4(x)
         x = self.avg_pool(x)
+        x = torch.flatten(x, start_dim=1)
+        x = self.fc06(x)
+        semantic_features = self.fc07(x)
+        p_label = self.fc08(semantic_features)
+        return semantic_features, p_label
+
+
+class SemanticImageExtractor_v2(nn.Module):
+    """
+    This class expected image as input with size (64x64x3)
+    """
+
+    def __init__(self, output_class_num, feature_size=200, pretrain=False):
+        super(SemanticImageExtractor_v2, self).__init__()
+        self.features = nn.Sequential(
+            # Alex1
+            nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            # Alex2
+            nn.Conv2d(64, 192, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+            # Alex3
+            nn.Conv2d(192, 384, kernel_size=3, padding=1),
+            nn.ReLU(),
+            # Alex4
+            nn.Conv2d(384, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            # Alex5
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2),
+        )
+        self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
+        # return the same number of features but change width and height of img
+
+        if pretrain:
+            ori_alex = torchvision.models.alexnet(pretrained=True)
+            ori_weight = ori_alex.state_dict()
+            ori_weight.pop('classifier.1.weight')
+            ori_weight.pop('classifier.1.bias')
+            ori_weight.pop('classifier.4.weight')
+            ori_weight.pop('classifier.4.bias')
+            ori_weight.pop('classifier.6.weight')
+            ori_weight.pop('classifier.6.bias')
+            self.load_state_dict(ori_weight)
+            del ori_alex
+            del ori_weight
+        # finally
+        self._add_classifier(output_class_num, feature_size)
+
+    def _add_classifier(self, output_class_num, feature_size):
+        self.fc06 = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU()
+        )
+
+        self.fc07 = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(4096, feature_size),
+            nn.ReLU()
+        )
+
+        self.fc08 = nn.Sequential(
+            nn.Linear(feature_size, output_class_num),
+            nn.Softmax()
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
         x = torch.flatten(x, start_dim=1)
         x = self.fc06(x)
         semantic_features = self.fc07(x)
@@ -219,28 +293,28 @@ class D1(nn.Module):
     def __init__(self):
         super(D1, self).__init__()
         self.conv1 = nn.Sequential(  # Currently we input black and white img
-            nn.BatchNorm2d(num_features=6),
+            #nn.BatchNorm2d(num_features=6),
             nn.Conv2d(6, 64, kernel_size=5, stride=2),
-            nn.LeakyReLU()
+            nn.LeakyReLU(0.2)
         )
         self.conv2 = nn.Sequential(
-            nn.BatchNorm2d(num_features=64),
             nn.Conv2d(64, 128, kernel_size=5, stride=2),
-            nn.LeakyReLU()
+            nn.InstanceNorm2d(num_features=128, affine=True),
+            nn.LeakyReLU(0.2)
         )
         self.conv3 = nn.Sequential(
-            nn.BatchNorm2d(num_features=128),
             nn.Conv2d(128, 256, kernel_size=5, stride=2),
-            nn.LeakyReLU()
+            nn.InstanceNorm2d(num_features=256, affine=True),
+            nn.LeakyReLU(0.2)
         )
         self.conv4 = nn.Sequential(
-            nn.BatchNorm2d(num_features=256),
             nn.Conv2d(256, 512, kernel_size=5, stride=2),
-            nn.LeakyReLU()
+            nn.InstanceNorm2d(num_features=512, affine=True),
+            nn.LeakyReLU(0.2)
         )
         self.final_fc = nn.Sequential(
             nn.Linear(in_features=512, out_features=46),
-            nn.LeakyReLU(),
+            nn.LeakyReLU(0.2),
             nn.Linear(in_features=46, out_features=1),
             # nn.Sigmoid()
         )
@@ -276,24 +350,23 @@ class D2(nn.Module):
         super(D2, self).__init__()
 
         self.conv1 = nn.Sequential(
-            nn.BatchNorm2d(num_features=3),
             nn.Conv2d(3, 32, kernel_size=5, stride=2),
-            nn.LeakyReLU()
+            nn.LeakyReLU(0.2)
         )
         self.conv2 = nn.Sequential(
-            nn.BatchNorm2d(num_features=32),
             nn.Conv2d(32, 64, kernel_size=3, stride=2),
-            nn.LeakyReLU()
+            nn.InstanceNorm2d(num_features=64, affine=True),
+            nn.LeakyReLU(0.2)
         )
         self.conv3 = nn.Sequential(
-            nn.BatchNorm2d(num_features=128),
             nn.Conv2d(128, 256, kernel_size=5, stride=2),
-            nn.LeakyReLU()
+            nn.InstanceNorm2d(num_features=256, affine=True),
+            nn.LeakyReLU(0.2)
         )
         self.conv4 = nn.Sequential(
-            nn.BatchNorm2d(num_features=256),
             nn.Conv2d(256, 512, kernel_size=5, stride=2),
-            nn.LeakyReLU()
+            nn.InstanceNorm2d(num_features=512, affine=True),
+            nn.LeakyReLU(0.2)
         )
 
         # self.final_fc = nn.Sequential(
@@ -308,8 +381,7 @@ class D2(nn.Module):
         self.final_fc_verynice = nn.Sequential(
             nn.Dropout(p=0.1),
             nn.Linear(12750, 226),
-            nn.LeakyReLU(),
-            nn.Dropout(p=0.1),
+            nn.LeakyReLU(0.2),
             nn.Linear(226, 1)
         )
 
@@ -353,6 +425,39 @@ class D2(nn.Module):
         x = self.final_fc_verynice(x)
         # x = self.final_fc_cylinder(x)
         return x
+
+
+class SimpleDiscriminator(nn.Module):
+    def __init__(self):
+        super(SimpleDiscriminator, self).__init__()
+        # self.ngpu = ngpu
+        dis_dim = 64
+        num_channel = 3
+        self.net = nn.Sequential(
+            # no batch norm in the first layer
+            # Input: batch x num_channel x 64 x 64
+            nn.Conv2d(
+                num_channel, dis_dim, kernel_size=4, stride=2, padding=1,
+            ),  # batch x 64 x 32 x 32
+            nn.LeakyReLU(0.2, inplace=True),
+            self._block(dis_dim, dis_dim * 2, 4, 2, 1),  # batch x 128 x 16 x 16
+            self._block(dis_dim * 2, dis_dim * 4, 4, 2, 1),  # batch x 256 x 8 x 8
+            self._block(dis_dim * 4, dis_dim * 8, 4, 2, 1),  # batch x 512 x 4  x 4
+            nn.Conv2d(dis_dim * 8, 1, kernel_size=4, stride=2, padding=0),  # batch x 1 x 1 x 1 for classification
+            #             nn.Sigmoid(), #<------removed!
+        )
+
+    def _block(self, in_channels, out_channels, kernel_size, stride, padding):
+        return nn.Sequential(
+            nn.Conv2d(
+                in_channels, out_channels, kernel_size, stride, padding, bias=False,  # batch norm does not require bias
+            ),
+            nn.InstanceNorm2d(out_channels, affine=True),  # <----changed here
+            nn.LeakyReLU(0.2, True)  # slope = 0.2, in_place = True
+        )
+
+    def forward(self, x):
+        return self.net(x)
 
 
 def __test_execution():

@@ -44,7 +44,7 @@ def j1_loss(l, fx, fy) -> torch.Tensor:
     return loss
 
 
-def j2_loss(l_real: torch.Tensor, lx: torch.Tensor) -> torch.Tensor:
+def j2_loss_(l_real: torch.Tensor, lx: torch.Tensor) -> torch.Tensor:
     """
     Calculate J2 loss
     :param l_real: A label from dataset
@@ -58,7 +58,11 @@ def j2_loss(l_real: torch.Tensor, lx: torch.Tensor) -> torch.Tensor:
     return loss
 
 
-def j3_loss(l_real: torch.Tensor, ly: torch.Tensor):
+j2_loss = torch.nn.CrossEntropyLoss(reduction='sum')
+j3_loss = j2_loss
+
+
+def j3_loss_(l_real: torch.Tensor, ly: torch.Tensor):
     """
     Calculate J3 loss
     :param l_real: A label from dataset
@@ -90,7 +94,10 @@ def j4_loss(fy_p, l_p, fx_u, l_u) -> torch.Tensor:
     return loss
 
 
-def j5_loss(l_real_u: torch.Tensor, lx_u: torch.Tensor):
+j5_loss = j2_loss
+
+
+def j5_loss_(l_real_u: torch.Tensor, lx_u: torch.Tensor):
     """
     Calculate J5 loss
     :param l_real_u: is unpaired image data
@@ -230,8 +237,10 @@ def l1_loss_v2(d1: D1, x_p, x_p_gen: torch.Tensor, lambda_gp, train_gen=False) -
     if train_gen:
         loss = - torch.mean(fake_pair)
     else:
-        # gp = gradient_penalty(d1, x_p, x_p_gen)
-        loss = (-(torch.mean(real_pair) - torch.mean(fake_pair)))  # + lambda_gp * gp)
+        intp_img = interpolate_img(real=x_p, fake=x_p_gen)
+        mx_sc = d1(x_p, intp_img)
+        gp = gradient_penalty(mixed_scores=mx_sc, interpolated_images=intp_img)
+        loss = (-(torch.mean(real_pair) - torch.mean(fake_pair))) + (lambda_gp * gp)
     return loss
 
 
@@ -272,8 +281,10 @@ def l2_loss_v2(d2: D2, x_p, x_p_gen, fy_p, ly_p, lambda_gp, train_gen=False) -> 
     if train_gen:
         loss = -torch.mean(d2_x_p_gen)
     else:
-        # gp = gradient_penalty(d2, x_p, x_p_gen)
-        loss = (-(torch.mean(d2_x_p) - torch.mean(d2_x_p_gen)))  # + lambda_gp * gp)
+        intp_img = interpolate_img(real=x_p, fake=x_p_gen)
+        mx_sc = d2(intp_img, fy_p, ly_p)
+        gp = gradient_penalty(mixed_scores=mx_sc, interpolated_images=intp_img)
+        loss = (-(torch.mean(d2_x_p) - torch.mean(d2_x_p_gen))) + (lambda_gp * gp)
     return loss
 
 
@@ -291,3 +302,22 @@ def l4_loss_v2(d2: D2, x_u, x_u_gen, fx_u, lx_u, lambda_gp, train_gen=False) -> 
     :return: l4 loss
     """
     return l2_loss_v2(d2, x_u, x_u_gen, fx_u, lx_u, lambda_gp, train_gen)
+
+
+def wgan_loss(d: SimpleDiscriminator, x_p, x_p_gen, lambda_gp, train_gen=False):
+    if train_gen:
+        d.eval()
+    else:
+        d.train()
+
+    d_x_p = d.forward(x_p)
+    d_x_p_gen = d.forward(x_p_gen)
+
+    if train_gen:
+        loss = -torch.mean(d_x_p_gen)
+    else:
+        intp_img = interpolate_img(real=x_p, fake=x_p_gen)
+        mx_sc = d(intp_img)
+        gp = gradient_penalty(mixed_scores=mx_sc, interpolated_images=intp_img)
+        loss = (-(torch.mean(d_x_p) - torch.mean(d_x_p_gen))) + (lambda_gp * gp)
+    return loss
