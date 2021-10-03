@@ -65,13 +65,15 @@ class SemanticImageExtractor(nn.Module):
         return semantic_features, p_label
 
 
-class SemanticImageExtractor_v2(nn.Module):
+class SemanticImageExtractorV2(nn.Module):
     """
     This class expected image as input with size (64x64x3)
     """
 
     def __init__(self, output_class_num, feature_size=200, pretrain=False):
-        super(SemanticImageExtractor_v2, self).__init__()
+        self.feature_size = feature_size
+        self.num_classes = output_class_num
+        super(SemanticImageExtractorV2, self).__init__()
         self.features = nn.Sequential(
             # Alex1
             nn.Conv2d(3, 64, kernel_size=11, stride=4, padding=2),
@@ -94,8 +96,8 @@ class SemanticImageExtractor_v2(nn.Module):
         )
         self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
         # return the same number of features but change width and height of img
-
-        if pretrain:
+        if (pretrain):
+            import torchvision
             ori_alex = torchvision.models.alexnet(pretrained=True)
             ori_weight = ori_alex.state_dict()
             ori_weight.pop('classifier.1.weight')
@@ -105,27 +107,24 @@ class SemanticImageExtractor_v2(nn.Module):
             ori_weight.pop('classifier.6.weight')
             ori_weight.pop('classifier.6.bias')
             self.load_state_dict(ori_weight)
-            del ori_alex
-            del ori_weight
-        # finally
-        self._add_classifier(output_class_num, feature_size)
+            del (ori_alex)
+            del (ori_weight)
 
-    def _add_classifier(self, output_class_num, feature_size):
+        self._add_classifier(self.num_classes, self.feature_size)
+
+    def _add_classifier(self, num_classes, feature_size):
         self.fc06 = nn.Sequential(
             nn.Dropout(),
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU()
         )
-
         self.fc07 = nn.Sequential(
             nn.Dropout(),
             nn.Linear(4096, feature_size),
             nn.ReLU()
         )
-
         self.fc08 = nn.Sequential(
-            nn.Linear(feature_size, output_class_num),
-            nn.Softmax()
+            nn.Linear(feature_size, num_classes),
         )
 
     def forward(self, x):
@@ -293,7 +292,7 @@ class D1(nn.Module):
     def __init__(self):
         super(D1, self).__init__()
         self.conv1 = nn.Sequential(  # Currently we input black and white img
-            #nn.BatchNorm2d(num_features=6),
+            # nn.BatchNorm2d(num_features=6),
             nn.Conv2d(6, 64, kernel_size=5, stride=2),
             nn.LeakyReLU(0.2)
         )
