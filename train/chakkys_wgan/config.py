@@ -1,7 +1,12 @@
+import os
 import torch
 
+# Config some proxy
+os.environ['http_proxy'] = 'http://192.41.170.23:3128'
+os.environ['https_proxy'] = 'http://192.41.170.23:3128'
+
 num_epochs_alex = 5
-num_epochs = 500
+num_epochs = 1
 workers = 0
 batch_size = 32
 image_size = 64

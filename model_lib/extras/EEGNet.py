@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from model.extras.layers import *
+from model_lib.extras.layers import *
 
 
 class EEGNet_Extractor(nn.Module):

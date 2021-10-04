@@ -9,8 +9,8 @@ from config import *
 from util import *
 from dataset.six_objects_1000stimuli import SixObject1KStimuli
 from dataset.very_nice_dataset import VeryNiceDataset
-from model.semi_supervised.model import SemanticImageExtractorV2
-from model.extras.EEGNet import EEGNet_Extractor
+from model_lib.semi_supervised.model import SemanticImageExtractorV2
+from model_lib.extras.EEGNet import EEGNet_Extractor
 from model import Generator, Discriminator2
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -72,6 +72,7 @@ I_losses = []
 # torch.autograd.set_detect_anomaly(True)
 
 print("Starting Training Loop...")
+iters = 0
 for epoch in range(num_epochs):
     for i, ((eeg, eeg_label, stim), (real, labels)) in enumerate(zip(eeg_loader, dataloader)):
 
@@ -178,16 +179,21 @@ for epoch in range(num_epochs):
                 fake = netG(noise, epl_dt,
                             eeg_latent).detach().cpu()  # <---send in noise instead to make sure the label matches
             img_list.append(vutils.make_grid(fake, padding=2, normalize=True))
-            sys.stdout.write("\rEpch:" + str(epoch) + "; Iters: " + str(
-                iters) + "; Gen Loss: %.04f; Dis Loss: %.04f; IE Loss: %.04f; EE Loss: %.04f; J1 Loss: %.04f" % (
-                                 gen_loss.item(), dis_loss.item(), ie_loss.item(), ee_loss.item(), j1_l.item()))
+
+        sys.stdout.write("\rEpch:" + str(epoch) + "; Iters: " + str(
+            iters) + "; Gen Loss: %.04f; Dis Loss: %.04f; IE Loss: %.04f; EE Loss: %.04f; J1 Loss: %.04f" % (
+                         gen_loss.item(), dis_loss.item(), ie_loss.item(), ee_loss.item(), j1_l.item()))
         iters += 1
 
-plt.figure(figsize=(10,5))
+print("\nPlotting...")
+os.environ.pop('http_proxy')
+os.environ.pop('https_proxy')
+
+plt.figure(figsize=(10, 5))
 plt.title("Generator and Discriminator Loss During Training")
-plt.plot(G_losses,label="G")
-plt.plot(D_losses,label="D")
-plt.plot(I_losses,label="I")
+plt.plot(G_losses, label="G")
+plt.plot(D_losses, label="D")
+plt.plot(I_losses, label="I")
 plt.xlabel("iterations")
 plt.ylabel("Loss")
 plt.legend()
@@ -197,23 +203,23 @@ plt.show()
 real_batch = next(iter(dataloader))
 
 # Plot the real images
-plt.figure(figsize=(15,15))
-plt.subplot(1,2,1)
+plt.figure(figsize=(15, 15))
+plt.subplot(1, 2, 1)
 plt.axis("off")
 plt.title("Real Images")
-plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=5, normalize=True).cpu(),(1,2,0)))
+plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=5, normalize=True).cpu(), (1, 2, 0)))
 
 # Plot the fake images from the last epoch
-plt.subplot(1,2,2)
+plt.subplot(1, 2, 2)
 plt.axis("off")
 plt.title("Fake Images")
-plt.imshow(np.transpose(img_list[-1],(1,2,0)))
+plt.imshow(np.transpose(img_list[-1], (1, 2, 0)))
 plt.show()
 
 #%%capture
-fig = plt.figure(figsize=(8,8))
+fig = plt.figure(figsize=(8, 8))
 plt.axis("off")
-ims = [[plt.imshow(np.transpose(i,(1,2,0)), animated=True)] for i in img_list]
+ims = [[plt.imshow(np.transpose(i, (1, 2, 0)), animated=True)] for i in img_list]
 ani = animation.ArtistAnimation(fig, ims, interval=1000, repeat_delay=1000, blit=True)
 
 HTML(ani.to_jshtml())
