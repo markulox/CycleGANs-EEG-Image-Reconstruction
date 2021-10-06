@@ -3,6 +3,7 @@ import os
 import torch
 from torch.utils.data import Dataset
 import pickle
+import random
 
 
 class SixObject1KStimuli(Dataset):
@@ -32,7 +33,23 @@ class SixObject1KStimuli(Dataset):
         return "SixObject1KStimuli"
 
 
+class SixObject1KStimuliv2(SixObject1KStimuli):
+    def __init__(self, dev, exclude_class: list = None):
+        super().__init__(dev=dev, exclude_class=exclude_class)
+
+    def __getitem__(self, idx):
+        stim, label = super().__getitem__(idx)
+        while True:
+            rng = random.randint(a=0, b=len(self.whole_data))
+            stim_w, label_w = super().__getitem__(rng)
+            if torch.argmax(label_w) != torch.argmax(label):
+                break
+
+        return stim, stim_w, label, label_w
+
+
 if __name__ == "__main__":
-    dataset = SixObject1KStimuli(dev="cpu")
-    for i, (stim, label) in enumerate(dataset):
-        print(i, stim.shape, label.shape)
+    dataset = SixObject1KStimuliv2(dev="cpu")
+    for i, (stim, stim_w, label, label_w) in enumerate(dataset):
+        print(i, stim.shape, torch.argmax(label))
+        print(stim_w.shape, torch.argmax(label_w))

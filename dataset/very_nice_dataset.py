@@ -1,6 +1,8 @@
 import os
+import torch
 from torch.utils.data import Dataset
 import pickle
+import random
 
 
 class VeryNiceDataset(Dataset):
@@ -32,6 +34,22 @@ class VeryNiceDataset(Dataset):
 
     def change_participant_id(self, participant_id=1):
         self.curr_participant = self.whole_data[participant_id]
+
+
+class VeryNiceDatasetv2(VeryNiceDataset):
+
+    def __init__(self, dev, participant_id=1):
+        super().__init__(dev=dev, participant_id=participant_id)
+
+    def __getitem__(self, idx):
+        eeg, label, stim = super().__getitem__(idx)
+        while True:
+            rng = random.randint(a=0, b=len(self.whole_data))
+            eeg_w, label_w, stim_w = super().__getitem__(rng)
+            if torch.argmax(label_w) != torch.argmax(label):
+                break
+
+        return eeg, eeg_w, label, label_w, stim, stim_w
 
 
 if __name__ == "__main__":
