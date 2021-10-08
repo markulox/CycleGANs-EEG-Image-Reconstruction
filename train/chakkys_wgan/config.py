@@ -2,11 +2,11 @@ import os
 import torch
 
 # Config some proxy
-os.environ['http_proxy'] = 'http://192.41.170.23:3128'
-os.environ['https_proxy'] = 'http://192.41.170.23:3128'
+# os.environ['http_proxy'] = 'http://192.41.170.23:3128'
+# os.environ['https_proxy'] = 'http://192.41.170.23:3128'
 
 num_epochs_alex = 5
-num_epochs = 400
+num_epochs = 5000
 workers = 0
 batch_size = 32
 image_size = 64
@@ -15,7 +15,7 @@ z_dim = 100
 gen_dim = 64
 dis_dim = 64
 ngpu = 1
-lr = 2e-4  # <-----changed
+lr = 1e-4  # <-----changed
 lr_g = 1e-4
 lambda_gp = 10
 embed_size = 100  # <---follow the paper

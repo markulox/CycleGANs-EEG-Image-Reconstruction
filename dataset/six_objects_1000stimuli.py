@@ -40,7 +40,7 @@ class SixObject1KStimuliv2(SixObject1KStimuli):
     def __getitem__(self, idx):
         stim, label = super().__getitem__(idx)
         while True:
-            rng = random.randint(a=0, b=len(self.whole_data))
+            rng = random.randint(a=0, b=len(self.whole_data)-1)
             stim_w, label_w = super().__getitem__(rng)
             if torch.argmax(label_w) != torch.argmax(label):
                 break

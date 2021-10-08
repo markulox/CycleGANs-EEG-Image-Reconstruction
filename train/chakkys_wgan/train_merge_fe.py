@@ -24,8 +24,8 @@ dataset_eeg = VeryNiceDatasetv2(dev=device)
 eeg_loader = DataLoader(dataset_eeg, batch_size=batch_size, shuffle=True, num_workers=workers)
 
 eeg_sample = next(iter(eeg_loader))[0]
-eeg_label_sample = next(iter(eeg_loader))[1]
-img_label_sample = next(iter(dataloader))[1]
+eeg_label_sample = next(iter(eeg_loader))[2]
+img_label_sample = next(iter(dataloader))[2]
 sample_len = eeg_sample.shape[2]
 channel_num = eeg_sample.shape[1]
 
@@ -56,9 +56,11 @@ criterion = nn.CrossEntropyLoss(reduction='mean')
 tune_up_criterion = nn.MSELoss(reduction='mean')
 
 # Training conf Loop
+ie_iter = 1
+ee_iter = 1
 tunes_up = 1
-dis_iter = 1
-gen_iter = 2
+dis_iter = 2
+gen_iter = 1
 img_list = []
 G_losses = []
 D_losses = []
@@ -85,17 +87,39 @@ for epoch in range(num_epochs):
         cur_batch_size = x_u.shape[0]
         eeg_batch_size = y_p.shape[0]
 
+        for _ in range(ie_iter):
+            fx, lx_p = netIE(x_p)
+            _, lx_u = netIE(x_u)
+
+            # ie_loss_p = criterion(lx_p, l_p)
+            ie_loss_u = criterion(lx_u, l_u)
+            # ie_loss = ie_loss_p + ie_loss_u
+
+            ie_loss = ie_loss_u
+
+            optimizerIE.zero_grad()
+            ie_loss.backward()
+            optimizerIE.step()
+
+        for _ in range(ee_iter):
+            fy, ly_p = netEE(y_p)
+            ee_loss = criterion(ly_p, l_p)
+
+            optimizerEE.zero_grad()
+            ee_loss.backward()
+            optimizerEE.step()
+
         # Train the FE
         for _ in range(tunes_up):
             fy, ly_p = netEE(y_p)
             fx, lx_p = netIE(x_p)
             _, lx_u = netIE(x_u)
-
             # j1_l = j1_loss(l=eeg_label, fx=semantic_latent, fy=eeg_latent)
-            ie_loss = criterion(lx_p, l_p)
-            ie_loss_u = criterion(lx_u, l_u)
-            ee_loss = criterion(ly_p, l_p)
-            j1_l = tune_up_criterion(fx, fy) + ie_loss + ee_loss + ie_loss_u
+
+            # ie_loss_p = criterion(lx_p, l_p)
+            # ie_loss_u = criterion(lx_u, l_u)
+            # ee_loss = criterion(ly_p, l_p)
+            j1_l = tune_up_criterion(fx, fy)  # + ee_loss + ie_loss_u + ie_loss_p
 
             optimizerEE.zero_grad()
             optimizerIE.zero_grad()
@@ -107,6 +131,9 @@ for epoch in range(num_epochs):
         for _ in range(dis_iter):
             fx_u, lx_u = netIE(x_u)
             lx_u_num = torch.argmax(lx_u.long(), 1)
+
+            fx_u_w, lx_u_w = netIE(x_u_w)
+            lx_u_num_w = torch.argmax(lx_u_w.long(), 1)
             noise = torch.randn(cur_batch_size, z_dim, 1, 1, device=device)
 
             fy_p, ly_p = netEE(y_p)
@@ -115,12 +142,14 @@ for epoch in range(num_epochs):
 
             # output_real = netD(real, semantic_latent, apl_dt).view(-1)   #<------we use alex_pred
             # Real stuff
+            # min_D = netD(x_u, fx_u, lx_u_num).view(-1)
             min_D = torch.cat((
                 netD(x_u, fx_u, lx_u_num).view(-1),
-                netD(x_p, fy_p, ly_p_num).view(-1)
+                netD(x_u_w, fx_u_w, lx_u_num_w).view(-1),
             ))
 
             x_u_gen = netG(noise, lx_u_num, fx_u)  # <------we use alex_pred
+            x_u_gen_w = netG(noise, lx_u_num_w, fx_u_w)
             x_p_gen = netG(noise_eeg, ly_p_num, fy_p)
 
             fx_u_w, lx_u_w = netIE(x_u_w)
@@ -130,11 +159,14 @@ for epoch in range(num_epochs):
             ly_p_w_num = torch.argmax(ly_p_w.long(), 1)
             # output_fake = netD(fake, semantic_latent, apl_dt).view(-1)  #<------we use alex_pred
             # Fake stuff
+            # max_D = netD(x_u_gen, fx_u, lx_u_num).view(-1)
             max_D = torch.cat((
                 netD(x_u_gen, fx_u, lx_u_num).view(-1),
-                netD(x_u_gen, fx_u_w, lx_u_w_num).view(-1),
-                netD(x_p_gen, fy_p, ly_p_num).view(-1),
-                netD(x_p_gen, fy_p_w, ly_p_w_num).view(-1)
+                netD(x_u_gen, fx_u_w, lx_u_w_num).view(-1),  # This
+                # netD(x_p_gen, fy_p, ly_p_num).view(-1),  # This
+                # netD(x_p_gen, fy_p_w, ly_p_w_num).view(-1)  # This
+                netD(x_u_gen_w, fx_u, lx_u_num).view(-1),
+                netD(x_u_gen_w, fx_u_w, lx_u_w_num).view(-1)
             ))
 
             gp = gradient_penalty(netD, fx_u, lx_u_num, x_u, x_u_gen, device=device)  # <------we use alex_pred
@@ -156,10 +188,12 @@ for epoch in range(num_epochs):
             noise_eeg = torch.randn(eeg_batch_size, z_dim, 1, 1, device=device)
 
             x_u_gen = netG(noise, lx_u_num, fx_u)
-            x_p_gen = netG(noise_eeg, ly_p_num, fy_p)
-            # output = netD(fake, semantic_latent, apl_dt).view(-1)
-            output = torch.cat(
-                (netD(x_u_gen, fx_u, lx_u_num).view(-1), netD(x_p_gen, fy_p, ly_p_num).view(-1)))
+            # x_p_gen = netG(noise_eeg, ly_p_num, fy_p)
+            output = netD(x_u_gen, fx_u, lx_u_num).view(-1)
+            # output = torch.cat((
+            #     netD(x_u_gen, fx_u, lx_u_num).view(-1),
+            #     netD(x_p_gen, fy_p, ly_p_num).view(-1)
+            # ))
             gen_loss = -torch.mean(output)
 
             optimizerG.zero_grad()
@@ -172,11 +206,27 @@ for epoch in range(num_epochs):
         D_losses.append(dis_loss.item())
 
         # Check how the generator is doing by saving G's output on noise
-        if (iters % 100 == 0) or ((epoch == num_epochs - 1) and (i == len(dataloader) - 1)):
+        if (iters % 500 == 0) or ((epoch == num_epochs - 1) and (i == len(dataloader) - 1)):
             with torch.no_grad():
-                x_u_gen = netG(noise, ly_p_num,
-                               fy_p).detach().cpu()  # <- send in noise instead to make sure the label matches
+                x_u_gen = netG(noise_eeg, lx_u_num,
+                               fx_u).detach().cpu()  # <- send in noise instead to make sure the label matches
+
             img_list.append(vutils.make_grid(x_u_gen, padding=2, normalize=True))
+
+            # Plot the real images
+            # plt.figure(figsize=(15, 15))
+            # plt.subplot(1, 2, 1)
+            # plt.axis("off")
+            # plt.title("Real Images")
+            # plt.imshow(np.transpose(vutils.make_grid(x_p.to(device)[:64], padding=5, normalize=True).cpu(),
+            #                         (1, 2, 0)))
+
+            # Plot the fake images from the last epoch
+            # plt.subplot(1, 2, 2)
+            plt.axis("off")
+            plt.title("Fake Images")
+            plt.imshow(np.transpose(img_list[-1], (1, 2, 0)))
+            plt.show()
 
         sys.stdout.write("\rEpch:" + str(epoch) + "; Iters: " + str(
             iters) + "; Gen Loss: %.04f; Dis Loss: %.04f; IE Loss: %.04f; EE Loss: %.04f; J1 Loss: %.04f" % (
@@ -184,8 +234,8 @@ for epoch in range(num_epochs):
         iters += 1
 
 print("\nPlotting...")
-os.environ.pop('http_proxy')
-os.environ.pop('https_proxy')
+# os.environ.pop('http_proxy')
+# os.environ.pop('https_proxy')
 
 plt.figure(figsize=(10, 5))
 plt.title("Generator and Discriminator Loss During Training")
