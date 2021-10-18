@@ -5,13 +5,16 @@ import time
 import datetime
 import math
 
+import torch.nn.functional as nn_func
+
 from dataset.mind_big_data import MindBigData
 from dataset.six_objects_1000stimuli import SixObject1KStimuli
 from dataset.cylinder_rgb import Cylinder_RBG_Dataset
-from dataset.EEGImageNet_Spam_et_al import EEGImageNetDataset_Spam
-from model.semi_supervised.loss_func import *  # The model already import in loss_func.py file
+from dataset.EEGImageNet_Spam_et_al import EEGImageNetDataset_Spam, UnpairedStimuliDataset
+from model_lib.semi_supervised.loss_func import *  # The model already import in loss_func.py file
 from torch.utils.data import DataLoader
-from model.extras.EEGNet import EEGNet_Extractor
+from model_lib.extras.EEGNet import EEGNet_Extractor
+from model_lib.semi_supervised.model import *
 from dataset.very_nice_dataset import VeryNiceDataset
 
 from config import *
@@ -27,8 +30,10 @@ from utils import WeightClipper, weights_init
 
 # Dataset initialization
 # dataset_paired = MindBigData(dev=DEV)
-dataset_paired = VeryNiceDataset(dev=DEV)
-dataset_unpaired = SixObject1KStimuli(dev=DEV)
+print("Loading EEG")
+dataset_paired = EEGImageNetDataset_Spam(dev=DEV)
+print("Loading Unpaired Stimuli")
+dataset_unpaired = UnpairedStimuliDataset(dev=DEV)
 
 # dataset_unpaired = _____ รอไปก่อนน้ะ
 
@@ -36,41 +41,48 @@ dataset_unpaired = SixObject1KStimuli(dev=DEV)
 # dataset = Cylinder_RBG_Dataset(dev=DEV)
 # dataset2 = EEGImageNetDataset_Spam(dev=DEV, sample_max_idx=380)
 # val_dataset = Cylinder_RBG_Dataset(dev=DEV)
-val_dataset = MindBigData(dev=DEV)
+# val_dataset = MindBigData(dev=DEV)
 
 dat_loader_paired = DataLoader(dataset=dataset_paired, batch_size=BS, shuffle=True)
 dat_loader_unpaired = DataLoader(dataset=dataset_unpaired, batch_size=BS_UNPAIRED, shuffle=True)
-val_loader = DataLoader(dataset=val_dataset, batch_size=BS, shuffle=True)
+# val_loader = DataLoader(dataset=val_dataset, batch_size=BS, shuffle=True)
 
 # Model initialization
 eeg_sample = next(iter(dat_loader_paired))[0]
 sample_len = eeg_sample.shape[2]
 channel_num = eeg_sample.shape[1]
 
-NUM_LIM_CLASS = 6
+label = next(iter(dat_loader_paired))[2]
+NUM_LIM_CLASS = dataset_paired.NUM_CLASSES
+
 EXPORT_DISABLE = False
 
-sx = SemanticImageExtractor(output_class_num=NUM_LIM_CLASS,
-                            feature_size=feature_size).to(DEV)
+sx = SemanticImageExtractorV2(
+    output_class_num=NUM_LIM_CLASS,
+    feature_size=LATENT_SIZE,
+    pretrain=True
+).to(DEV)
 # Argument expected_shape : send some sample data to let model determine its structure
 # sy = SemanticEEGExtractor(expected_shape=input_sample,
 #                           output_class_num=NUM_LIM_CLASS,
 #                           feature_size=feature_size).to(DEV)
-sy = EEGNet_Extractor(in_channel=channel_num,
-                      samples=sample_len,
-                      kern_len=sample_len // 2,
-                      F1=10,
-                      F2=10,
-                      D=2,
-                      nb_classes=NUM_LIM_CLASS,
-                      latent_size=feature_size).to(DEV)
+sy = EEGNet_Extractor(
+    in_channel=channel_num,
+    samples=sample_len,
+    kern_len=sample_len // 2,
+    F1=10,
+    F2=10,
+    D=2,
+    nb_classes=NUM_LIM_CLASS,
+    latent_size=LATENT_SIZE
+).to(DEV)
 
 d1 = D1().to(DEV)
-d2 = D2().to(DEV)
+d2 = D2(num_classes=NUM_LIM_CLASS, embed_size=EMBEDDED_SIZE).to(DEV)
 # d3 = SimpleDiscriminator().to(DEV)
-# G = Generator(num_classes=NUM_LIM_CLASS).to(DEV)
-input_size = NUM_LIM_CLASS + feature_size + ChakkyGenerator.EXPECTED_NOISE
-G = ChakkyGenerator(input_size=input_size).to(DEV)
+G = Generator(num_classes=NUM_LIM_CLASS, embed_size=EMBEDDED_SIZE, latent_size=LATENT_SIZE).to(DEV)
+# input_size = NUM_LIM_CLASS + LATENT_SIZE + ChakkyGenerator.EXPECTED_NOISE
+# G = ChakkyGenerator(input_size=input_size).to(DEV)
 
 # Init model weight
 G.apply(weights_init)
@@ -82,18 +94,21 @@ d2.apply(weights_init)
 weight_cliper = WeightClipper(min=WEIGHT_MIN, max=WEIGHT_MAX)
 
 # Optimizer initialization
-sx_op = torch.optim.Adam(sx.parameters(), lr=mu1, betas=(0.5, 0.999))
-sy_op = torch.optim.Adam(sy.parameters(), lr=mu1, betas=(0.5, 0.999))
+# sx_op = torch.optim.Adam(sx.parameters(), lr=mu1, betas=(0.5, 0.999))
+sx_op = torch.optim.SGD(sx.parameters(), lr=mu1, momentum=0.5)
+# sy_op = torch.optim.Adam(sy.parameters(), lr=mu1, betas=(0.5, 0.999))
+sy_op = torch.optim.SGD(sy.parameters(), lr=mu1, momentum=0.5)
 
-d1_op = torch.optim.Adam(d1.parameters(), lr=mu2, betas=(0.0, 0.999))
-# d1_op = torch.optim.SGD(d1.parameters(), lr=mu2, momentum=0.5)
+# d1_op = torch.optim.Adam(d1.parameters(), lr=mu2, betas=(0.0, 0.999))
+d1_op = torch.optim.SGD(d1.parameters(), lr=mu2, momentum=0.5)
 # d1_op = torch.optim.RMSprop(d1.parameters(), lr=mu2)
-d2_op = torch.optim.Adam(d2.parameters(), lr=mu2, betas=(0.0, 0.999))
-# d2_op = torch.optim.SGD(d2.parameters(), lr=mu2, momentum=0.5)
+# d2_op = torch.optim.Adam(d2.parameters(), lr=mu2, betas=(0.0, 0.999))
+d2_op = torch.optim.SGD(d2.parameters(), lr=mu2, momentum=0.5)
 # d2_op = torch.optim.RMSprop(d2.parameters(), lr=mu2)
 # d3_op = torch.optim.Adam(d3.parameters(), lr=mu2, betas=(0.0, 0.999))
 
-G_op = torch.optim.Adam(G.parameters(), lr=mu2, betas=(0.5, 0.999))
+# G_op = torch.optim.Adam(G.parameters(), lr=mu2, betas=(0.5, 0.999))
+G_op = torch.optim.SGD(G.parameters(), lr=mu2, momentum=0.5)
 
 # Set some path for export stuff
 __dirname__ = os.path.dirname(__file__)
@@ -119,22 +134,25 @@ def load_model(start_epch):
 
 def sample_images(epch):
     """Saves a generated sample from the test set"""
-    real_eeg, real_label, real_stim = next(iter(dat_loader_paired))
-    real_stim, real_label = next(iter(dat_loader_unpaired))
-    real_stim = real_stim[0:10, :, :, :]
-    real_label = real_label[0:10, :]
+    sample_num = 10
+    real_eeg, real_stim, real_label_digit = next(iter(dat_loader_paired))
+    # real_stim, real_label = next(iter(dat_loader_unpaired))
+    real_eeg = real_eeg[0:sample_num, :, :]
+    real_stim = real_stim[0:sample_num, :, :, :]
+    real_label_digit = real_label_digit[0:sample_num]
     sy.eval()
     G.eval()
-    # eeg_features, p_label = sy(real_eeg)
+    eeg_features, p_label = sy(real_eeg)
+    p_label = torch.argmax(p_label, dim=1)
     curr_BS = real_stim.shape[0]
 
     # eeg_features = eeg_features.squeeze(1).detach()
     # p_label = p_label.squeeze(1).detach()
 
-    eeg_features = torch.randn(size=(curr_BS, feature_size)).to(DEV)
-    p_label = torch.randn(size=(curr_BS, NUM_LIM_CLASS)).to(DEV)
+    # eeg_features = torch.randn(size=(curr_BS, LATENT_SIZE)).to(DEV)
+    # p_label = torch.randn(size=(curr_BS, NUM_LIM_CLASS)).to(DEV)
 
-    fake_stim = G(z=torch.rand(curr_BS, G.EXPECTED_NOISE).to(DEV), semantic=eeg_features, label=p_label)
+    fake_stim = G(semantic=eeg_features, label=p_label)
     fake_stim = make_grid(fake_stim, nrow=5, normalize=True)
     # Arange images along y-axis
     real_stim = make_grid(real_stim, nrow=5, normalize=True)
@@ -173,11 +191,16 @@ for epch in range(EPCH_START, EPCH_END + 1):
     batch_j1 = []
     batch_j2 = []
     batch_j3 = []
-    for i, ((y_p, l_real_p, x_p), (x_u, l_real_u)) in enumerate(zip(dat_loader_paired, dat_loader_unpaired)):
+    for i, ((y_p, x_p, l_real_p_digit), (x_u, l_real_u)) in enumerate(zip(dat_loader_paired, dat_loader_unpaired)):
         # Get some stuff first
         # Since some of batch might get reduce due to end of iteration
         curr_BS_pair = x_p.shape[0]
         curr_BS_unpair = x_u.shape[0]
+
+        # Reformat label a bit (_digit -> number, otherwise -> one hot encoded)
+        l_real_p = nn_func.one_hot(l_real_p_digit, num_classes=NUM_LIM_CLASS).float()
+        l_real_u_digit = torch.argmax(l_real_u, dim=1)
+        l_real_u = l_real_u.float()
 
         # SEMANTIC NETWORK TRAINING SECTION
         # print("UPDATING SEMANTIC EXTRACTOR")
@@ -186,14 +209,17 @@ for epch in range(EPCH_START, EPCH_END + 1):
 
         fx_p, lx_p = sx(x_p)
         fy_p, ly_p = sy(y_p)
+        lx_p_digit = torch.argmax(lx_p, dim=1)
+        ly_p_digit = torch.argmax(ly_p, dim=1)
 
         fx_u, lx_u = sx(x_u)  # For this dataset, I think its still make sense to do this
+        lx_u_digit = torch.argmax(lx_u, dim=1)
 
         j1 = j1_loss(l=l_real_p, fx=fx_p, fy=fy_p)
-        j2 = j2_loss(lx_p, torch.argmax(l_real_p, dim=1))
-        j3 = j3_loss(ly_p, torch.argmax(l_real_p, dim=1))
+        j2 = j2_loss(lx_p, l_real_p_digit)
+        j3 = j3_loss(ly_p, l_real_p_digit)
         j4 = j4_loss(fy_p=fy_p, l_p=l_real_p, fx_u=fx_u, l_u=l_real_u)
-        j5 = j5_loss(lx_u, torch.argmax(l_real_u, dim=1))
+        j5 = j5_loss(lx_u, l_real_u_digit)
         j_loss = (alp0 * j1) + (alp1 * j2) + (alp2 * j3) + (alp0 * j4) + (alp3 * j5)
         # j_loss = (alp1 * j2) + (alp2 * j3) + (alp0 * j4) + (alp3 * j5)
         # j_loss = j1 + (alp1 * j2) + (alp2 * j3)
@@ -211,8 +237,13 @@ for epch in range(EPCH_START, EPCH_END + 1):
         # Reshape the tensor corresponding to the generator and detach everything
         fy_p = fy_p.squeeze(1).detach()
         ly_p = ly_p.squeeze(1).detach()
+        ly_p_digit = ly_p_digit.detach()
+
         fx_u = fx_u.squeeze(1).detach()
+        lx_p = lx_p.squeeze(1).detach()
+        lx_p_digit = lx_p_digit.detach()
         lx_u = lx_u.squeeze(1).detach()
+        lx_u_digit = lx_u_digit.detach()
 
         # DISCRIMINATOR TRAINING SECTION #########################################
         # print("UPDATING DISCRIM")
@@ -222,23 +253,23 @@ for epch in range(EPCH_START, EPCH_END + 1):
             # d3_op.zero_grad()
 
             # noise_1 = torch.normal(mean=1, std=1, size=(curr_BS_pair, G.EXPECTED_NOISE)).to(DEV)
-            # x_p_gen = G.forward(z=noise_1, semantic=fy_p, label=ly_p)
+            x_p_gen = G.forward(semantic=fy_p, label=ly_p_digit)
             # x_p_gen_dtch = x_p_gen.detach()
-            # l1 = l1_loss_v2(d1, x_p, x_p_gen, LAMBDA_GP)
-            # l2 = l2_loss_v2(d2, x_p, x_p_gen, fy_p, ly_p, LAMBDA_GP)
+            l1 = l1_loss(d1, x_p, x_p_gen)
+            l2 = l2_loss(d2, x_p, x_p_gen, fy_p, ly_p_digit)
 
             # fx_u = torch.randn_like(fx_u)
             # lx_u = torch.randn_like(lx_u)
 
-            noise_2 = torch.randn(size=(curr_BS_unpair, G.EXPECTED_NOISE)).to(DEV)
-            x_u_gen = G.forward(z=noise_2, semantic=fx_u, label=lx_u)
+            # noise_2 = torch.randn(size=(curr_BS_unpair, G.EXPECTED_NOISE)).to(DEV)
+            x_u_gen = G.forward(semantic=fx_u, label=lx_u_digit)
             # x_u_gen_dtch = x_u_gen.detach()
             # lwgan = wgan_loss(d3, x_u, x_u_gen, LAMBDA_GP)
-            l3 = l3_loss_v2(d1, x_u, x_u_gen, LAMBDA_GP)
-            l4 = l4_loss_v2(d2, x_u, x_u_gen, fx_u, lx_u, LAMBDA_GP)
+            l3 = l3_loss(d1, x_u, x_u_gen)
+            l4 = l4_loss(d2, x_u, x_u_gen, fx_u, lx_u_digit)
 
-            # dl_loss = (ld1 * l1) + l2 + (ld2 * l3) + l4
-            dl_loss = (ld2*l3) + l4
+            dl_loss = (ld1 * l1) + l2 + (ld2 * l3) + l4
+            # dl_loss = (ld2 * l3) + l4
             # dl_loss = lwgan
             # check_nan(dl_loss.item(), dl1=l1.item(), dl2=l2.item(), dl3=l3.item(), dl4=l4.item())
             dl_loss.backward(retain_graph=True)
@@ -257,24 +288,24 @@ for epch in range(EPCH_START, EPCH_END + 1):
         G_op.zero_grad()
 
         # noise_1 = torch.normal(mean=1, std=1, size=(curr_BS_pair, G.EXPECTED_NOISE)).to(DEV)
-        # x_p_gen = G.forward(z=noise_1, semantic=fy_p, label=ly_p)
-        # l1 = l1_loss_v2(d1, x_p, x_p_gen, LAMBDA_GP, train_gen=True)
-        # l2 = l2_loss_v2(d2, x_p, x_p_gen, fy_p, ly_p, LAMBDA_GP, train_gen=True)
+        x_p_gen = G.forward(semantic=fy_p, label=ly_p_digit)
+        l1 = l1_loss(d1, x_p, x_p_gen, train_gen=True)
+        l2 = l2_loss(d2, x_p, x_p_gen, fy_p, ly_p_digit, train_gen=True)
 
         # fx_u = torch.randn_like(fx_u)
         # lx_u = torch.randn_like(lx_u)
-        noise_2 = torch.rand(size=(curr_BS_unpair, G.EXPECTED_NOISE)).to(DEV)
-        x_u_gen = G.forward(z=noise_2, semantic=fx_u, label=lx_u)
-        l3 = l3_loss_v2(d1, x_u, x_u_gen, LAMBDA_GP, train_gen=True)
-        l4 = l4_loss_v2(d2, x_u, x_u_gen, fx_u, lx_u, LAMBDA_GP, train_gen=True)
+        # noise_2 = torch.rand(size=(curr_BS_unpair, G.EXPECTED_NOISE)).to(DEV)
+        x_u_gen = G.forward(semantic=fx_u, label=lx_u_digit)
+        l3 = l3_loss(d1, x_u, x_u_gen, train_gen=True)
+        l4 = l4_loss(d2, x_u, x_u_gen, fx_u, lx_u_digit, train_gen=True)
         # lwgan = wgan_loss(d3, x_u, x_u_gen, LAMBDA_GP, train_gen=True)
 
-        # gl_loss = (ld1 * l1) + l2 + (ld2 * l3) + l4
-        gl_loss = (ld2 * l3) + l4
+        gl_loss = (ld1 * l1) + l2 + (ld2 * l3) + l4
+        # gl_loss = (ld2 * l3) + l4
         # gl_loss = lwgan
         # check_nan(gl_loss.item(), gl1=l1.item(), gl2=l2.item(), gl3=l3.item(), gl4=l4.item())
         gl_loss.backward()
-        torch.nn.utils.clip_grad_norm_(G.parameters(), MAX_GRAD_FLOAT32)
+        # torch.nn.utils.clip_grad_norm_(G.parameters(), MAX_GRAD_FLOAT32)
         G_op.step()
 
         batch_j1.append(j1.item())
@@ -289,7 +320,7 @@ for epch in range(EPCH_START, EPCH_END + 1):
         # print(j_loss.item(), dl_loss.item())
 
         sys.stdout.write(
-            "\r[Epoch %d/%d] [Batch %d/%d] [J loss: %f 1[%.4f] 2[%.4f acc=%.2f] 3[%.2f, acc=%.2f] 4[%.2f] 5[%.2f]] [D loss: %.4f] [G loss: %.4f] ETA: %s"
+            "\r%d/%d [Batch %d/%d] [J loss: %f 1[%.4f] 2[%.4f acc=%.2f] 3[%.2f, acc=%.2f] 4[%.2f] 5[%.2f]] [D loss: %.4f] [G loss: %.4f] ETA: %s"
             % (
                 epch,
                 EPCH_END,

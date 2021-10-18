@@ -1,6 +1,6 @@
 import torch
 
-from model.semi_supervised.model import *
+from model_lib.semi_supervised.model import *
 
 LOSS_MIN_CLAMP = 1e-38
 
@@ -121,6 +121,8 @@ def j5_loss_(l_real_u: torch.Tensor, lx_u: torch.Tensor):
 # print(loss_j1)
 # print(j2_3_loss(i_real, i_predict))
 
+bce_loss = torch.nn.BCELoss(reduction='sum')
+
 
 def l1_loss(d1: D1, x_p, x_p_gen: torch.Tensor, train_gen=False) -> torch.Tensor:
     """
@@ -131,16 +133,18 @@ def l1_loss(d1: D1, x_p, x_p_gen: torch.Tensor, train_gen=False) -> torch.Tensor
     :param train_gen: Set this to be True when you want to train the generator
     :return: l1 loss if x and x_gen from paired data.
     """
+    real_pair = d1.forward(x_p, x_p)
+    fake_pair = d1.forward(x_p, x_p_gen)
+
+    # Ground truth vector
+    real_gt = torch.zeros_like(real_pair).to(real_pair.device)
+    fake_gt = torch.ones_like(fake_pair).to(fake_pair.device)
+
     if train_gen:
-        d1.eval()
+        loss = bce_loss(fake_pair, real_gt)
     else:
-        d1.train()
+        loss = bce_loss(real_pair, real_gt) + bce_loss(fake_pair, fake_gt)
 
-    real_pair = d1.forward(x_p, x_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
-    fake_pair = d1.forward(x_p, x_p_gen).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
-
-    loss = torch.log(real_pair) + torch.log(1 - fake_pair)
-    loss = torch.sum(loss)
     return loss
 
 
@@ -168,14 +172,18 @@ def l2_loss(d2: D2, x_p, x_p_gen, fy_p, ly_p, train_gen=False) -> torch.Tensor:
     :param train_gen: Set this to be True when you want to train the generator
     :return: l2 loss
     """
+    real_pair = d2.forward(x_p, fy_p, ly_p)
+    fake_pair = d2.forward(x_p_gen, fy_p, ly_p)
+
+    # Ground truth vector
+    real_gt = torch.zeros_like(real_pair).to(real_pair.device)
+    fake_gt = torch.ones_like(fake_pair).to(fake_pair.device)
+
     if train_gen:
-        d2.eval()
+        loss = bce_loss(fake_pair, real_gt)
     else:
-        d2.train()
-    d2_x_p = d2.forward(x_p, fy_p, ly_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
-    d2_x_p_gen = d2.forward(x_p_gen, fy_p, ly_p).clamp(min=LOSS_MIN_CLAMP, max=0.999999)
-    loss = torch.log(d2_x_p) + torch.log(1 - d2_x_p_gen)
-    loss = torch.sum(loss)
+        loss = bce_loss(real_pair, real_gt) + bce_loss(fake_pair, fake_gt)
+
     return loss
 
 

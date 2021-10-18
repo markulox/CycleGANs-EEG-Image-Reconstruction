@@ -223,28 +223,28 @@ class Generator(nn.Module):  # <<- CGAN
     # How can we input both label and features?
     # EXPECTED_NOISE = 2064  # << For EEGImageNet with 48x48
     # EXPECTED_NOISE = 2098  # << For VeryNiceDataset with 48x48
-    EXPECTED_NOISE = 100  # For now, I will use this noise size
-
+    # EXPECTED_NOISE = 100  # For now, I will use this noise size
     # EXPECTED_NOISE = 2101  # Cylinder_RGB with 48x48
 
-    def __init__(self, latent_size, num_classes):
+    def __init__(self, latent_size, num_classes, embed_size):
         super(Generator, self).__init__()
         self.lt_s = latent_size
+        self.embed_size = embed_size
         self.num_classes = num_classes
-        l1_size = self.EXPECTED_NOISE + self.lt_s + self.num_classes
+        l1_size = self.lt_s + self.embed_size
         self.deconv1 = nn.Sequential(
             nn.ConvTranspose2d(l1_size, 128, kernel_size=5, stride=2, output_padding=1, bias=False),
-            nn.BatchNorm2d(128),
+            nn.InstanceNorm2d(128, affine=True),
             nn.ReLU(True)
         )
         self.deconv2 = nn.Sequential(
             nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=1, output_padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.InstanceNorm2d(64, affine=True),
             nn.ReLU(True)
         )
         self.deconv3 = nn.Sequential(
             nn.ConvTranspose2d(64, 32, kernel_size=5, stride=2, padding=1, output_padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.InstanceNorm2d(32, affine=True),
             nn.ReLU(True)
         )
         self.deconv4 = nn.Sequential(
@@ -252,31 +252,31 @@ class Generator(nn.Module):  # <<- CGAN
             # nn.BatchNorm2d(32),
             nn.Tanh()
         )
-        self.deconv5 = nn.Sequential(
-            nn.ConvTranspose2d(32, 3, kernel_size=5, stride=1, padding=1, output_padding=1, bias=False),
-            nn.Tanh()
-        )
+        # self.deconv5 = nn.Sequential(
+        #     nn.ConvTranspose2d(32, 3, kernel_size=5, stride=1, padding=1, output_padding=1, bias=False),
+        #     nn.Tanh()
+        # )
 
-    def __forward_check(self, z, eeg_semantic, eeg_label):
-        if z.shape[1] != Generator.EXPECTED_NOISE:
-            raise RuntimeError("Incorrect shape of vector \'z\'")
-        if eeg_semantic.shape[1] != 200:
-            raise RuntimeError("Incorrect shape of vector \'eeg_semantic\'")
-        if eeg_label.shape[1] != self.num_classes:
-            raise RuntimeError("Incorrect shape of vector \'eeg_label\'")
+        self.embedder = nn.Embedding(num_classes, embedding_dim=embed_size)
+
+    def __forward_check(self, eeg_semantic, label):
+        tag = "<Generator> : "
+        if eeg_semantic.shape[1] != self.lt_s:
+            raise RuntimeError(tag + "Incorrect shape of vector \'eeg_semantic\'")
 
     # -- Expected shape --
     # z.shape = (3839,)
     # eeg_semantic.shape = (200,)
     # label.shape = (10,)
-    def forward(self, z, semantic, label):
-        # First, we need to concat.
-        # Problem
-        #   Should we concat and deconvolution it?
-        #   Second problem, what is the size of z
-        self.__forward_check(z, semantic, label)
-        x = torch.cat((z, semantic, label), 1)
-        x = x.reshape(x.shape[0], 100 + 200 + self.num_classes, 1, 1)
+    def forward(self, semantic, label):
+        """
+        :param semantic: The latent vector
+        :param label: Label tensor (Expected as an index format (Single digit format))
+        :return:
+        """
+        self.__forward_check(semantic, label)
+        x = torch.cat((semantic, self.embedder(label)), 1)
+        x = x.reshape(x.shape[0], 200 + self.embed_size, 1, 1)
         x = self.deconv1(x)
         x = self.deconv2(x)
         x = self.deconv3(x)
@@ -307,15 +307,15 @@ class D1(nn.Module):
             nn.LeakyReLU(0.2)
         )
         self.conv4 = nn.Sequential(
-            nn.Conv2d(256, 512, kernel_size=5, stride=2),
-            nn.InstanceNorm2d(num_features=512, affine=True),
+            nn.Conv2d(256, 512, kernel_size=5),
+            # nn.InstanceNorm2d(num_features=512, affine=True),
             nn.LeakyReLU(0.2)
         )
         self.final_fc = nn.Sequential(
             nn.Linear(in_features=512, out_features=46),
             nn.LeakyReLU(0.2),
             nn.Linear(in_features=46, out_features=1),
-            # nn.Sigmoid()
+            nn.Sigmoid()
         )
 
     @staticmethod
@@ -345,8 +345,10 @@ class D1(nn.Module):
 
 # In the paper, This is D1
 class D2(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes, embed_size):
         super(D2, self).__init__()
+
+        self.embedder = nn.Embedding(num_classes, embedding_dim=embed_size)
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=5, stride=2),
@@ -358,31 +360,30 @@ class D2(nn.Module):
             nn.LeakyReLU(0.2)
         )
         self.conv3 = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size=5, stride=2),
-            nn.InstanceNorm2d(num_features=256, affine=True),
+            nn.Conv2d(64, 128, kernel_size=5, stride=2),
+            nn.InstanceNorm2d(num_features=128, affine=True),
             nn.LeakyReLU(0.2)
         )
         self.conv4 = nn.Sequential(
-            nn.Conv2d(256, 512, kernel_size=5, stride=2),
-            nn.InstanceNorm2d(num_features=512, affine=True),
+            nn.Conv2d(128, 256, kernel_size=5),
+            # nn.InstanceNorm2d(num_features=256, affine=True),
             nn.LeakyReLU(0.2)
         )
 
         # self.final_fc = nn.Sequential(
         #     nn.Dropout(p=0.1),
-        #     nn.Linear(12784, 226),
+        #     nn.Linear(12784, 226),  # TODO: Check the shape
         #     nn.LeakyReLU(),
         #     nn.Dropout(p=0.1),
-        #     nn.Linear(226, 1),
-        #     nn.Sigmoid()
+        #     nn.Linear(226, 1)
         # )
 
-        self.final_fc_verynice = nn.Sequential(
-            nn.Dropout(p=0.1),
-            nn.Linear(12750, 226),
-            nn.LeakyReLU(0.2),
-            nn.Linear(226, 1)
-        )
+        # self.final_fc_verynice = nn.Sequential(
+        #     nn.Dropout(p=0.1),
+        #     nn.Linear(12750, 226),
+        #     nn.LeakyReLU(0.2),
+        #     nn.Linear(226, 1)
+        # )
 
         # self.final_fc_cylinder = nn.Sequential(
         #     nn.Dropout(p=0.1),
@@ -393,11 +394,11 @@ class D2(nn.Module):
         #     nn.Sigmoid()
         # )
 
-        self.final_fc2 = nn.Sequential(
-            nn.Linear(512, 46),
+        self.final_fc = nn.Sequential(
+            nn.Linear(496, 46),
             nn.LeakyReLU(),
             nn.Linear(46, 1),
-            # nn.Sigmoid()
+            nn.Sigmoid()
         )
 
     @staticmethod
@@ -411,17 +412,23 @@ class D2(nn.Module):
             raise RuntimeError("Expected shape", (3, 64, 64))
 
     def forward(self, img, features, label):  # , eeg_features, eeg_label):
+        """
+        :param img: Stimuli image
+        :param features: Latent vector
+        :param label: Label (Expected as single digit)
+        :return:
+        """
         # self.__forward_check(img, eeg_features, eeg_label)
         x = self.conv1(img)
         x = self.conv2(x)
-        # x = self.conv3(x)
-        # x = self.conv4(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
         # x = self.conv5(x)
 
         x = x.flatten(start_dim=1)
         x = torch.cat((x, features), 1)  # Concat eeg_features
-        x = torch.cat((x, label), 1)  # Concat label
-        x = self.final_fc_verynice(x)
+        x = torch.cat((x, self.embedder(label)), 1)  # Concat label
+        x = self.final_fc(x)
         # x = self.final_fc_cylinder(x)
         return x
 

@@ -54,7 +54,8 @@ class EEGNet_Extractor(nn.Module):
         self.latent_fc = nn.Sequential(
             # nn.Linear(in_features=1140, out_features=latent_size),  # This for Beau's dataset
             # nn.Linear(in_features=2090, out_features=latent_size),  # This for MindBigData
-            nn.Linear(in_features=3610, out_features=latent_size),  # This is for VeryNiceDataset
+            # nn.Linear(in_features=3610, out_features=latent_size),  # This is for VeryNiceDataset
+            nn.Linear(in_features=2470, out_features=latent_size),  # For Spampinato's dataset
             nn.LeakyReLU()
         )
 
