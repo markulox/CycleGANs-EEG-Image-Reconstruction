@@ -137,8 +137,8 @@ def l1_loss(d1: D1, x_p, x_p_gen: torch.Tensor, train_gen=False) -> torch.Tensor
     fake_pair = d1.forward(x_p, x_p_gen)
 
     # Ground truth vector
-    real_gt = torch.zeros_like(real_pair).to(real_pair.device)
-    fake_gt = torch.ones_like(fake_pair).to(fake_pair.device)
+    fake_gt = torch.zeros_like(real_pair).to(real_pair.device)
+    real_gt = torch.ones_like(fake_pair).to(fake_pair.device)
 
     if train_gen:
         loss = bce_loss(fake_pair, real_gt)
@@ -176,8 +176,8 @@ def l2_loss(d2: D2, x_p, x_p_gen, fy_p, ly_p, train_gen=False) -> torch.Tensor:
     fake_pair = d2.forward(x_p_gen, fy_p, ly_p)
 
     # Ground truth vector
-    real_gt = torch.zeros_like(real_pair).to(real_pair.device)
-    fake_gt = torch.ones_like(fake_pair).to(fake_pair.device)
+    fake_gt = torch.zeros_like(real_pair).to(real_pair.device)
+    real_gt = torch.ones_like(fake_pair).to(fake_pair.device)
 
     if train_gen:
         loss = bce_loss(fake_pair, real_gt)

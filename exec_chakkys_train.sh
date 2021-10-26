@@ -1,0 +1,1 @@
+PYTHONPATH="/root/MountPoint/Image_recon" python3 "/root/MountPoint/Image_recon/train/chakkys_wgan/train_test_img_gen.py"

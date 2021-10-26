@@ -6,7 +6,7 @@ import numpy as np
 from torch import optim
 from torch.utils.data import DataLoader
 from config import *
-from util import *
+from train.chakkys_wgan.libs.model_utils import *
 from dataset.six_objects_1000stimuli import SixObject1KStimuli
 from dataset.very_nice_dataset import VeryNiceDataset
 from model_lib.semi_supervised.model import SemanticImageExtractorV2

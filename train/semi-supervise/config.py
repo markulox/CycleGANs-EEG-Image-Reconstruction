@@ -30,7 +30,7 @@ EPCH_START = 0
 EPCH_END = 6000
 
 # Device selection
-DEV = "cuda:1"
+DEV = "cuda:0"
 
 CHCK_PNT_INTERVAL = 100
 SAMPLE_INTERVAL = 10

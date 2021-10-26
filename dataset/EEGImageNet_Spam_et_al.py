@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 
 # Dataset class
 class EEGImageNetDataset_Spam(Dataset):
-    __EEG_TRAIN_LOC__ = 'content/EEGImageNetDataset_Spampinato/eeg_5_95_std.pth'
-    __STIM_LIB_LOC__ = 'content/EEGImageNetDataset_Spampinato/stim_lib.dat'
+    __EEG_TRAIN_LOC__ = 'EEGImageNetDataset_Spampinato/eeg_5_95_std.pth'
+    __STIM_LIB_LOC__ = 'EEGImageNetDataset_Spampinato/stim_lib.dat'
 
     #     __EEG_TRAIN_LOC__ = "content/EEGImageNetDataset_Spam/eeg_5_95_std.pth"
     #     __STIM_LIB_LOC__ = "content/EEGImageNetDataset_Spam/stim_lib.dat"
@@ -22,11 +22,20 @@ class EEGImageNetDataset_Spam(Dataset):
     NUM_CLASSES = 40
 
     # Constructor
-    def __init__(self, dev, subject=0, sample_min_idx=20, sample_max_idx=460, model_type='model10', train_ratio=0.8):
+    def __init__(self, dev, content_path=None, subject=0, sample_min_idx=20, sample_max_idx=460,
+                 model_type='model10',
+                 train_ratio=0.8):
         # Load EEG signals
-        eeg_path = os.path.join(os.path.dirname(__file__), self.__EEG_TRAIN_LOC__)
+        if content_path is not None:
+            eeg_path = os.path.join(os.path.dirname(__file__), 'content', self.__EEG_TRAIN_LOC__)
+        else:
+            eeg_path = os.path.join(content_path, self.__EEG_TRAIN_LOC__)
         loaded = torch.load(eeg_path)
-        stim_path = os.path.join(os.path.dirname(__file__), self.__STIM_LIB_LOC__)
+        if content_path is not None:
+            stim_path = os.path.join(os.path.dirname(__file__), 'content', self.__STIM_LIB_LOC__)
+        else:
+            stim_path = os.path.join(content_path, self.__STIM_LIB_LOC__)
+
         self.img_lib = pickle.load(open(stim_path, "rb"))
         self.dev = dev
         if subject != 0:
@@ -97,22 +106,46 @@ class EEGImageNetDataset_Spam(Dataset):
 
 
 class UnpairedStimuliDataset(Dataset):
-    __CONTENT_LOC__ = 'content/EEGImageNetDataset_Spampinato/unpaired_stim.dict'
+    __CONTENT_LOC__ = 'EEGImageNetDataset_Spampinato/unpaired_stim.dict'
+    TRAIN_MODE = True
     NUM_CLASSES = 40
 
-    def __init__(self, dev):
+    def __init__(self, dev, content_path=None, train_ratio=0.8):
         super(UnpairedStimuliDataset, self).__init__()
-        load_path = os.path.join(os.path.dirname(__file__), self.__CONTENT_LOC__)
+        if content_path is None:
+            load_path = os.path.join(os.path.dirname(__file__), 'content', self.__CONTENT_LOC__)
+        else:
+            load_path = os.path.join(content_path, self.__CONTENT_LOC__)
         self.loaded = pickle.load(open(load_path, "rb"))
         self.stim_list = self.loaded['stimuli']
         self.label_list = self.loaded['labels']
+
+        self.stim_train, self.stim_test, self.label_train, self.label_test = train_test_split(self.stim_list,
+                                                                                              self.label_list,
+                                                                                              test_size=1 - train_ratio)
         self.dev = dev
 
     def __getitem__(self, idx):
-        return self.stim_list[idx, :, :, :].to(self.dev), self.label_list[idx, :].to(self.dev)
+        if self.TRAIN_MODE:
+            return self.stim_train[idx, :, :, :].to(self.dev), self.label_train[idx, :].to(self.dev)
+        else:
+            return self.stim_test[idx, :, :, :].to(self.dev), self.label_test[idx, :].to(self.dev)
 
     def __len__(self):
-        return self.stim_list.shape[0]
+        if self.TRAIN_MODE:
+            return self.stim_train.shape[0]
+        else:
+            return self.stim_test.shape[0]
+
+    def set_train(self):
+        self.TRAIN_MODE = True
+
+    def set_test(self):
+        self.TRAIN_MODE = False
+
+    @staticmethod
+    def get_name():
+        return "ImageNetDataset"
 
 
 # Splitter class

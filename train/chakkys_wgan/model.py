@@ -14,7 +14,7 @@ class Generator(nn.Module):
             self._block(gen_dim * 8, gen_dim * 4, 4, 2, 1),  # batch x 256 x 16 x 16
             self._block(gen_dim * 4, gen_dim * 2, 4, 2, 1),  # batch x 128 x 32 x 32
             nn.ConvTranspose2d(
-                gen_dim * 2, num_channel, kernel_size=4, stride=2, padding=1,
+                gen_dim * 2, num_channel_img, kernel_size=4, stride=2, padding=1,
                 # did not use block because the last layer won't use batch norm or relu
             ),  # batch x 3 x 64 x 64
             nn.Tanh(),
@@ -53,7 +53,7 @@ class Discriminator2(nn.Module):
             # Input: batch x num_channel x 64 x 64
             # <-----changed num_channel + 1 since we add the labels
             nn.Conv2d(
-                num_channel + 2, dis_dim, kernel_size=4, stride=2, padding=1,
+                num_channel_img + 2, dis_dim, kernel_size=4, stride=2, padding=1,
             ),  # batch x 64 x 32 x 32
             nn.LeakyReLU(0.2, inplace=True),
             self._block(dis_dim, dis_dim * 2, 4, 2, 1),  # batch x 128 x 16 x 16

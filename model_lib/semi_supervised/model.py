@@ -234,17 +234,17 @@ class Generator(nn.Module):  # <<- CGAN
         l1_size = self.lt_s + self.embed_size
         self.deconv1 = nn.Sequential(
             nn.ConvTranspose2d(l1_size, 128, kernel_size=5, stride=2, output_padding=1, bias=False),
-            nn.InstanceNorm2d(128, affine=True),
+            nn.BatchNorm2d(128),
             nn.ReLU(True)
         )
         self.deconv2 = nn.Sequential(
             nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=1, output_padding=1, bias=False),
-            nn.InstanceNorm2d(64, affine=True),
+            nn.BatchNorm2d(64),
             nn.ReLU(True)
         )
         self.deconv3 = nn.Sequential(
             nn.ConvTranspose2d(64, 32, kernel_size=5, stride=2, padding=1, output_padding=1, bias=False),
-            nn.InstanceNorm2d(32, affine=True),
+            nn.BatchNorm2d(32),
             nn.ReLU(True)
         )
         self.deconv4 = nn.Sequential(
@@ -298,12 +298,12 @@ class D1(nn.Module):
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=5, stride=2),
-            nn.InstanceNorm2d(num_features=128, affine=True),
+            nn.BatchNorm2d(num_features=128),
             nn.LeakyReLU(0.2)
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(128, 256, kernel_size=5, stride=2),
-            nn.InstanceNorm2d(num_features=256, affine=True),
+            nn.BatchNorm2d(num_features=256),
             nn.LeakyReLU(0.2)
         )
         self.conv4 = nn.Sequential(
@@ -315,7 +315,7 @@ class D1(nn.Module):
             nn.Linear(in_features=512, out_features=46),
             nn.LeakyReLU(0.2),
             nn.Linear(in_features=46, out_features=1),
-            nn.Sigmoid()
+            # nn.Sigmoid()
         )
 
     @staticmethod
@@ -356,12 +356,12 @@ class D2(nn.Module):
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, stride=2),
-            nn.InstanceNorm2d(num_features=64, affine=True),
+            nn.BatchNorm2d(num_features=64),
             nn.LeakyReLU(0.2)
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=5, stride=2),
-            nn.InstanceNorm2d(num_features=128, affine=True),
+            nn.BatchNorm2d(num_features=128),
             nn.LeakyReLU(0.2)
         )
         self.conv4 = nn.Sequential(

@@ -29,3 +29,5 @@ def gradient_penalty(dis, features, labels, real, fake, device="cpu"):  # <---ad
     gradient_norm = gradient.norm(2, dim=1)
     gp = torch.mean((gradient_norm - 1) ** 2)
     return gp
+
+
